@@ -26,7 +26,7 @@ static char* getword(char * begin, char **endp){
   }
   char* end = begin;
   //have end point to the end of the word
-  while(*end != '\0' && *end != '\n' && *end != ' '){
+  while(*end != '\0' && *end != '\n' && *end != ' ' && *end != EOF){
     end++;
   }
   //null if we are at the end
@@ -42,7 +42,7 @@ static char* getword(char * begin, char **endp){
 static void redirect(char* argv[]){
   int i = 0;
   while(argv[i] != NULL){
-    if(strcmp(argv[i], ">") == 0){
+    if(strcmp(argv[i], ">") == 0 || strcmp(argv[i], "2>") == 0){
       out = argv[i+1];
       argv[i] = NULL;
       break;
@@ -65,7 +65,7 @@ static void getargs(char cmd[], int *argcp, char *argv[]){
   out = NULL;
 
   // reading stdin and saving into cmd
-  while((*cmdp = getc(stdin)) != '\n' || *cmdp == EOF){
+  while((*cmdp = getc(stdin)) != '\n'){
     if(*cmdp == EOF){
       shouldExit = 1;
       break;
@@ -74,6 +74,8 @@ static void getargs(char cmd[], int *argcp, char *argv[]){
   }
 
   cmdp = cmd;
+  if(*cmdp == EOF) do_exit();
+
   //scans through cmd and puts each word into argv
   while((cmdp = getword(cmdp, &end)) != NULL && cmdp[0] != '#'){
     argv[i] = cmdp;
@@ -107,7 +109,7 @@ static void execute(char *argv[]) {
       }
     }
     if(execvp(argv[0], argv) < 0){
-      printf("Error: Command not found\n");
+      printf("Error: Command not found.\n");
     }
     exit(1);
   }
@@ -124,7 +126,7 @@ int main(int argc, char*argv[]) {
   setvbuf(stdout, NULL, _IONBF, 0); 
 
   // Variables' declaration.
-  char* cmd = (char*) calloc(MAX, sizeof(char));
+  char* cmd;
   char* childargv[MAX/10];
   int childargc;
   char* user = (char*) calloc(50, sizeof(char));
@@ -133,23 +135,28 @@ int main(int argc, char*argv[]) {
 
   // Main loop that reads a command and executes it
   while (1) {         
+    if(shouldExit){
+      do_exit();
+    }
     // You should issue the prompt here
     user = getenv("USER");
     gethostname(host, 100);
     getcwd(dir, 400);
+    cmd = (char*) calloc(MAX, sizeof(char));
     printf("%s@%s:%s> ", user, host, dir);  
     fflush(stdout);
     // You should read in the command and execute it here
     getargs(cmd, &childargc, childargv);
-    if (shouldExit || (childargc > 0 && strcmp(childargv[0], "exit") == 0)){
+    if ((childargc > 0 && strcmp(childargv[0], "exit") == 0)){
+      //free(user);
+      //free(host);
+      //free(dir);    
       do_exit();
     }
     execute(childargv);
+    free(cmd);
   }
-  free(cmd);
-  free(user);
-  free(host);
-  free(dir);
+  // UNREACHABLE 
   return 0;
 }
 
