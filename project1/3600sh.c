@@ -44,7 +44,7 @@ static void getargs(char cmd[], int *argcp, char *argv[]){
   int i = 0;
 
   // reading stin and saving into cmd, if couldnt read then exit
-  while((*cmdp = getc(stdin) != '\n')){
+  while((*cmdp = getc(stdin)) != '\n'){
     if(*cmdp == EOF){
       shouldExit = 1;
       break;
@@ -63,12 +63,26 @@ static void getargs(char cmd[], int *argcp, char *argv[]){
   *argcp = i+1;
 }
 
-static void execute(int argc, char *argv[]) {
-  int i = 0;
+static void execute(char *argv[]) {
+  /*int i = 0;
   for(i = 0; i < argc-1; i++) {
     printf("%d: %s ", i, argv[i]);
   }
-  printf("\n");
+  printf("\n");*/
+  pid_t pid = fork();
+  if(pid < 0) {
+    printf("Error: Couldn't fork\n");
+    exit(1);
+  }
+  else if(pid == 0) {
+    if(execvp(argv[0], argv) < 0){
+      printf("Error: Command not found\n");
+    }
+    exit(1);
+  }
+  else {
+    waitpid(pid, NULL, 0);
+  } 
 }
 
 int main(int argc, char*argv[]) {
@@ -89,7 +103,7 @@ int main(int argc, char*argv[]) {
   // Main loop that reads a command and executes it
   while (1) {         
     // You should issue the prompt here
-    user = getlogin();
+    user = getenv("USER");
     gethostname(host, 100);
     getcwd(dir, 400);
     printf("%s@%s:%s> ", user, host, dir);  
@@ -99,7 +113,7 @@ int main(int argc, char*argv[]) {
     if ((childargc > 0 && strcmp(childargv[0], "exit") == 0) || shouldExit){
       do_exit();
     }
-    execute(childargc, childargv);
+    execute(childargv);
   }
   free(user);
   free(host);
