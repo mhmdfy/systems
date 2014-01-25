@@ -14,14 +14,15 @@
 
 #define MAX 300
 
+int shouldExit = 0;
+
 //get the first word for the input string
-//
-static char * getword(char * begin, char **endp){
+static char* getword(char * begin, char **endp){
   //gets rid of leading zeros
   while(*begin == ' '){
     begin++;
   }
-  char * end = begin;
+  char* end = begin;
   //have end point to the end of the word
   while(*end != '\0' && *end != '\n' && *end != ' '){
     end++;
@@ -37,16 +38,21 @@ static char * getword(char * begin, char **endp){
 }
 
 //reads the input from the user
-//
 static void getargs(char cmd[], int *argcp, char *argv[]){
   char *cmdp = cmd;
   char *end;
   int i = 0;
+
   // reading stin and saving into cmd, if couldnt read then exit
-  if(fgets(cmd, MAX, stdin) == NULL && feof(stdin)){
-    printf("Error: Could not read from standard input.\n");
-    exit(1);
+  while((*cmdp = getc(stdin) != '\n')){
+    if(*cmdp == EOF){
+      shouldExit = 1;
+      break;
+    }
+    cmdp++;
   }
+
+  cmdp = cmd;
   //scans through cmd and puts each word into argv
   while((cmdp = getword(cmdp, &end)) != NULL && cmdp[0] != '#'){
     argv[i] = cmdp;
@@ -71,12 +77,15 @@ int main(int argc, char*argv[]) {
   USE(argc);
   USE(argv);
   setvbuf(stdout, NULL, _IONBF, 0); 
+
+  // Variables' declaration.
   char* cmd = (char*) calloc(MAX, sizeof(char));
-  char *childargv[MAX/10];
+  char*childargv[MAX/10];
   int childargc;
   char* user = (char*) calloc(50, sizeof(char));
   char* host = (char*) calloc(100, sizeof(char));
   char* dir = (char*) calloc(400, sizeof(char));
+
   // Main loop that reads a command and executes it
   while (1) {         
     // You should issue the prompt here
@@ -87,7 +96,7 @@ int main(int argc, char*argv[]) {
     fflush(stdout);
     // You should read in the command and execute it here
     getargs(cmd, &childargc, childargv);
-    if (childargc > 0 && strcmp(childargv[0], "exit") == 0){
+    if ((childargc > 0 && strcmp(childargv[0], "exit") == 0) || shouldExit){
       do_exit();
     }
     execute(childargc, childargv);
