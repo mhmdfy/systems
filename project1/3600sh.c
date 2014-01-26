@@ -17,6 +17,7 @@
 int shouldExit = 0;
 char* out = NULL;
 char* in = NULL;
+char* err = NULL;
 
 //get the first word for the input string
 static char* getword(char * begin, char **endp){
@@ -42,15 +43,17 @@ static char* getword(char * begin, char **endp){
 static void redirect(char* argv[]){
   int i = 0;
   while(argv[i] != NULL){
-    if(strcmp(argv[i], ">") == 0 || strcmp(argv[i], "2>") == 0){
+    if(strcmp(argv[i], ">") == 0){
       out = argv[i+1];
       argv[i] = NULL;
-      break;
     }
-    if(strcmp(argv[i], "<") == 0){
+    else if(strcmp(argv[i], "2>") == 0){
+      err = argv[i+1];
+      argv[i] = NULL;
+    }  
+    else if(strcmp(argv[i], "<") == 0){
       in = argv[i+1];
       argv[i] = NULL;
-      break;
     }
     i++;
   }
@@ -63,6 +66,7 @@ static void getargs(char cmd[], int *argcp, char *argv[]){
   int i = 0;
   in = NULL;
   out = NULL;
+  err = NULL;
 
   // reading stdin and saving into cmd
   while((*cmdp = getc(stdin)) != '\n'){
@@ -97,14 +101,21 @@ static void execute(char *argv[]) {
     if(out != NULL) {
       close(STDOUT_FILENO);
       if(open(out, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR) < 0){
-        printf("Error: Unable to open redirection file");
+        printf("Error: Unable to open redirection file.");
         exit(1);
       }
     }
     if(in != NULL) {
       close(STDIN_FILENO);
       if(open(in, O_RDONLY) < 0){
-        printf("Error: Unable to open redirection file");
+        printf("Error: Unable to open redirection file.");
+        exit(1);
+      }
+    }
+    if(err != NULL) {
+      close(STDERR_FILENO);
+      if(open(err, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR) < 0){
+        printf("Error: Unable to open redirection file.");
         exit(1);
       }
     }
