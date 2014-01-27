@@ -100,7 +100,7 @@ static void execute(char *argv[]) {
   else if(pid == 0) {
     if(out != NULL) {
       close(STDOUT_FILENO);
-      if(open(out, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR) < 0){
+      if(open(out, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 0){
         printf("Error: Unable to open redirection file.");
         exit(1);
       }
@@ -114,7 +114,7 @@ static void execute(char *argv[]) {
     }
     if(err != NULL) {
       close(STDERR_FILENO);
-      if(open(err, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR) < 0){
+      if(open(err, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 0){
         printf("Error: Unable to open redirection file.");
         exit(1);
       }
