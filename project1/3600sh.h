@@ -23,8 +23,14 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-void do_exit();
+void getargs(char* cmd, int *argcp, char **argv);
 
-static void getargs(char* cmd, int *argcp, char **argv);
+char* getword(char * begin, char **endp);
+
+void redirect(char* argv[]);
+
+void execute(char *argv[]);
+
+void do_exit();
 
 #endif 

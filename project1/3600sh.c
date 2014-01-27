@@ -11,123 +11,13 @@
 #include "3600sh.h"
 
 #define USE(x) (x) = (x)
-
 #define MAX 300
 
-int shouldExit = 0;
-char* out = NULL;
-char* in = NULL;
-char* err = NULL;
-
-//get the first word for the input string
-static char* getword(char * begin, char **endp){
-  //gets rid of leading zeros
-  while(*begin == ' '){
-    begin++;
-  }
-  char* end = begin;
-  //have end point to the end of the word
-  while(*end != '\0' && *end != '\n' && *end != ' ' && *end != EOF){
-    end++;
-  }
-  //null if we are at the end
-  if(end == begin){
-    return NULL;
-  }
-  //put a null char at the end of the word
-  *end = '\0';
-  *endp = end;
-  return begin;
-}
-
-static void redirect(char* argv[]){
-  int i = 0;
-  while(argv[i] != NULL){
-    if(strcmp(argv[i], ">") == 0){
-      out = argv[i+1];
-      argv[i] = NULL;
-    }
-    else if(strcmp(argv[i], "2>") == 0){
-      err = argv[i+1];
-      argv[i] = NULL;
-    }  
-    else if(strcmp(argv[i], "<") == 0){
-      in = argv[i+1];
-      argv[i] = NULL;
-    }
-    i++;
-  }
-}
-
-//reads the input from the user
-static void getargs(char cmd[], int *argcp, char *argv[]){
-  char *cmdp = cmd;
-  char *end;
-  int i = 0;
-  in = NULL;
-  out = NULL;
-  err = NULL;
-
-  // reading stdin and saving into cmd
-  while((*cmdp = getc(stdin)) != '\n'){
-    if(*cmdp == EOF){
-      shouldExit = 1;
-      break;
-    }
-    cmdp++;
-  }
-
-  cmdp = cmd;
-  if(*cmdp == EOF) do_exit();
-
-  //scans through cmd and puts each word into argv
-  while((cmdp = getword(cmdp, &end)) != NULL && cmdp[0] != '#'){
-    argv[i] = cmdp;
-    i++;
-    cmdp = end+1;
-  }
-  argv[i] = cmdp;
-  *argcp = i;
-  redirect(argv);
-}
-
-static void execute(char *argv[]) {
-  pid_t pid = fork();
-  if(pid < 0) {
-    printf("Error: Couldn't fork\n");
-    exit(1);
-  }
-  else if(pid == 0) {
-    if(out != NULL) {
-      close(STDOUT_FILENO);
-      if(open(out, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 0){
-        printf("Error: Unable to open redirection file.");
-        exit(1);
-      }
-    }
-    if(in != NULL) {
-      close(STDIN_FILENO);
-      if(open(in, O_RDONLY) < 0){
-        printf("Error: Unable to open redirection file.");
-        exit(1);
-      }
-    }
-    if(err != NULL) {
-      close(STDERR_FILENO);
-      if(open(err, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 0){
-        printf("Error: Unable to open redirection file.");
-        exit(1);
-      }
-    }
-    if(execvp(argv[0], argv) < 0){
-      printf("Error: Command not found.\n");
-    }
-    exit(1);
-  }
-  else {
-    waitpid(pid, NULL, 0);
-  } 
-}
+// Global Variables.
+int SHOULD_EXIT = 0;
+char* OUT = NULL;
+char* IN = NULL;
+char* ERR = NULL;
 
 int main(int argc, char*argv[]) {
   // Code which sets stdout to be unbuffered
@@ -144,31 +34,155 @@ int main(int argc, char*argv[]) {
   char* host = (char*) calloc(100, sizeof(char));
   char* dir = (char*) calloc(400, sizeof(char));
 
-  // Main loop that reads a command and executes it
+  // Main loop that reads a command and executes it.
   while (1) {         
-    if(shouldExit){
+    if(SHOULD_EXIT){
       do_exit();
     }
-    // You should issue the prompt here
+    // Get user information.
     user = getenv("USER");
     gethostname(host, 100);
     getcwd(dir, 400);
+
+    // Get the command from the Prompts.
     cmd = (char*) calloc(MAX, sizeof(char));
     printf("%s@%s:%s> ", user, host, dir);  
     fflush(stdout);
-    // You should read in the command and execute it here
     getargs(cmd, &childargc, childargv);
-    if ((childargc > 0 && strcmp(childargv[0], "exit") == 0)){
-      //free(user);
-      //free(host);
-      //free(dir);    
+
+    // If the command is "exit", then exit.
+    if ((childargc > 0 && strcmp(childargv[0], "exit") == 0)){ 
       do_exit();
     }
+    
+    // Execute the command.
     execute(childargv);
     free(cmd);
   }
   // UNREACHABLE 
-  return 0;
+  return 1;
+}
+
+//Reads the input from the user.
+void getargs(char cmd[], int *argcp, char *argv[]){
+  char *cmdp = cmd;
+  char *end;
+  int i = 0;
+
+  // Set file variables to null.
+  IN = NULL;
+  OUT = NULL;
+  ERR = NULL;
+
+  // Reading stdin and saving into cmd.
+  while((*cmdp = getc(stdin)) != '\n'){
+    if(*cmdp == EOF){
+      SHOULD_EXIT = 1;
+      break;
+    }
+    cmdp++;
+  }
+
+  // If we are at the end of the file (there is no command) exit.
+  cmdp = cmd;
+  if(*cmdp == EOF) do_exit();
+
+  // Scans through cmd and puts each word into argv.
+  while((cmdp = getword(cmdp, &end)) != NULL && cmdp[0] != '#'){
+    argv[i] = cmdp;
+    i++;
+    cmdp = end+1;
+  }
+
+  argv[i] = cmdp;
+  *argcp = i;
+  
+  // Figure out the file redirection characters.
+  redirect(argv);
+}
+
+// Get the first word for the input string
+char* getword(char * begin, char **endp){
+  // Gets rid of leading zeros
+  while(*begin == ' '){
+    begin++;
+  }
+
+  // Have end point to the end of the word
+  char* end = begin;
+  while(*end != '\0' && *end != '\n' && *end != ' ' && *end != EOF){
+    end++;
+  }
+
+  // Return null if we are at the end; There are no words
+  if(end == begin){
+    return NULL;
+  }
+
+  //Put a null char at the end of the word
+  *end = '\0';
+  *endp = end;
+  return begin;
+}
+
+// Search the arguments for file redirection, and there are any,
+// save them to the correct global variable.
+void redirect(char* argv[]){
+  int i = 0;
+  while(argv[i] != NULL){
+    if(strcmp(argv[i], ">") == 0){
+      OUT = argv[i+1];
+      argv[i] = NULL;
+    }
+    else if(strcmp(argv[i], "2>") == 0){
+      ERR = argv[i+1];
+      argv[i] = NULL;
+    }  
+    else if(strcmp(argv[i], "<") == 0){
+      IN = argv[i+1];
+      argv[i] = NULL;
+    }
+    i++;
+  }
+}
+
+// Executes the command by forking a child and waiting for it.
+void execute(char *argv[]) {
+  pid_t pid = fork();
+  if(pid < 0) {
+    printf("Error: Couldn't fork\n");
+    exit(1);
+  }
+  else if(pid == 0) {
+    if(OUT != NULL) {
+      close(STDOUT_FILENO);
+      if(open(OUT, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 0){
+        printf("Error: Unable to open redirection file.");
+        exit(1);
+      }
+    }
+    if(IN != NULL) {
+      close(STDIN_FILENO);
+      if(open(IN, O_RDONLY) < 0){
+        printf("Error: Unable to open redirection file.");
+        exit(1);
+      }
+    }
+    if(ERR != NULL) {
+      close(STDERR_FILENO);
+      if(open(ERR, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 0){
+        printf("Error: Unable to open redirection file.");
+        exit(1);
+      }
+    }
+    if(execvp(argv[0], argv) < 0){
+      printf("Error: Command not found.\n");
+    }
+    exit(1);
+  }
+  else {
+    waitpid(pid, NULL, 0);
+  } 
 }
 
 // Function which exits, printing the necessary message
