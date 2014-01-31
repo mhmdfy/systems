@@ -22,12 +22,19 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <errno.h>
 
 void getargs(char* cmd, int *argcp, char **argv);
 
 char* getword(char * begin, char **endp);
 
 void redirect(char* argv[]);
+
+int validRedirect(char* file);
+
+void background(char* argv[]);
+
+char escape(char c);
 
 void execute(char *argv[]);
 

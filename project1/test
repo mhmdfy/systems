@@ -58,7 +58,7 @@ my @tries = (	"ls \\8",
 		"     ls -a        -l                                                       -t   -r         -n -o                     -i              -h             /bin",
 		"ls \\ \\\\ \\ \\a",
 		"ls\t-altr\t/etc",
-		"ls -altr /etc &",
+		"ls -altr /etc &", 
 		"ls\t-altr /etc   &      ",
 		"ls & ls\n   \n\t\n",
 		"ls >",
@@ -88,9 +88,9 @@ sub test {
 
     system("./$SHELL < .data > .actual 2>&1");
     system("$SOLDIR$SHELL < .data > .expected 2>&1");
-    my $diff = `diff .expected .actual | egrep "^([<>]|Binary)"`;
+    my $diff = `diff -W 200 .expected .actual | egrep "^([<>]|Binary)"`;
     if ($diff) {
-      $diff = `diff -y .expected .actual`;
+      $diff = `diff -y -W 200 .expected .actual`;
     }
     `rm .actual .expected .data`;
 
