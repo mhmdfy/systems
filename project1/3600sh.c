@@ -174,7 +174,7 @@ void redirect(char* argv[]){
 
   while(argv[i] != NULL){
     if(strcmp(argv[i], ">") == 0){
-      if(outC == 0 && validRedirect(argv[i+1]) && !validRedirect(argv[i+2])){
+      if(outC == 0 && !redirectChar(argv[i+1]) && redirectChar(argv[i+2])){
         OUT = argv[i+1];
         argv[i] = NULL;
         outC++;
@@ -184,7 +184,7 @@ void redirect(char* argv[]){
       }
     }
     else if(strcmp(argv[i], "2>") == 0){
-      if(errC == 0 && validRedirect(argv[i+1]) && !validRedirect(argv[i+2])){
+      if(errC == 0 && !redirectChar(argv[i+1]) && redirectChar(argv[i+2])){
         ERR = argv[i+1];
         argv[i] = NULL;
         errC++;
@@ -194,7 +194,7 @@ void redirect(char* argv[]){
       }
     }  
     else if(strcmp(argv[i], "<") == 0){
-      if(inC == 0 && validRedirect(argv[i+1]) && !validRedirect(argv[i+2])){
+      if(inC == 0 && !redirectChar(argv[i+1]) && redirectChar(argv[i+2])){
         IN = argv[i+1];
         argv[i] = NULL;
         inC++;
@@ -208,14 +208,14 @@ void redirect(char* argv[]){
 }
 
 
-int validRedirect(char* file) {
+int redirectChar(char* file) {
   if(file == NULL)
-    return 0;
+    return 1;
   if(strcmp(file, ">") == 0 || strcmp(file, "<") == 0 
    || strcmp(file, "2>") == 0 || strcmp(file, "&") == 0) 
-    return 0;
-  else
     return 1;
+  else
+    return 0;
 }
 
 // searches the arguments for background processes

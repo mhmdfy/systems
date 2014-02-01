@@ -30,7 +30,7 @@ char* getword(char * begin, char **endp);
 
 void redirect(char* argv[]);
 
-int validRedirect(char* file);
+int redirectChar(char* file);
 
 void background(char* argv[]);
 
