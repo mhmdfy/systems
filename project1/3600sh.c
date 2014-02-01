@@ -257,26 +257,30 @@ void execute(char *argv[]) {
     exit(1);
   }
   else if(pid == 0) {
+    int fd;
     if(OUT != NULL) {
-      close(STDOUT_FILENO);
-      if(open(OUT, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 0){
+      if((fd = open(OUT, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR)) < 0){
         printf("Error: Unable to open redirection file.\n");
         exit(1);
       }
+      dup2(fd, STDOUT_FILENO);
+      close(fd);
     }
     if(IN != NULL) {
-      close(STDIN_FILENO);
-      if(open(IN, O_RDONLY) < 0){
+      if((fd = open(IN, O_RDONLY)) < 0){
         printf("Error: Unable to open redirection file.\n");
         exit(1);
       }
+      dup2(fd, STDIN_FILENO);
+      close(fd);
     }
     if(ERR != NULL) {
-      close(STDERR_FILENO);
-      if(open(ERR, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 0){
+      if((fd = open(ERR, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR)) < 0){
         printf("Error: Unable to open redirection file.\n");
         exit(1);
       }
+      dup2(fd, STDERR_FILENO);
+      close(fd);
     }
     if(execvp(argv[0], argv) < 0){
       if(errno == EACCES)

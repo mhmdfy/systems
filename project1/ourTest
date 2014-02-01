@@ -1,0 +1,125 @@
+#!/usr/bin/perl
+
+use File::Temp qw(tempfile);
+
+my $SEMESTER = "cs3600sp14";
+my $SOLDIR = "/course/$SEMESTER/code/solutions/project1/";
+my $SHELL = "3600sh";
+
+if (! (-e $SHELL)) {
+  error("Unable to find problem '$SHELL'.");
+}
+
+if (! (-e "$SOLDIR$SHELL")) {
+  print("$SOLDIR$SHELL");
+  error("Unable to find reference solution '$SHELL'.");
+}
+
+my $pattern = "/tmp/cs3600.project1.XXXXXX";
+my ($f1, $t1) = tempfile($pattern, UNLINK => 1); 
+my ($f2, $t2) = tempfile($pattern, UNLINK => 1); 
+my ($f3, $t3) = tempfile($pattern, UNLINK => 1); 
+my ($f4, $t4) = tempfile($pattern, UNLINK => 1); 
+
+my $total = 0;
+my $passed = 0;
+
+print "Regular Commmands\n";
+my @tries = (	"\tls /bin",
+		"ls -altr   /bin  ",
+		"ls -al /bin\n\n",
+		"      ls \t -a            -l /bin\n",
+		"blah",
+		"./3600sh.c",
+		"whoami",
+		"ls a",
+                "-l ls");
+test($problem, \@tries);
+
+print "\nBackground Commands\n";
+my @tries = (	"ls -a /bin&",
+		"   ls  -a  /bin     & ",
+		"ls & -a");
+test($problem, \@tries);
+
+print "\nEscape Characters\n";
+my @tries = (	"echo foo\\ bar\\tbaz",
+		"mkdir tmp\\ dir\nls   tmp\\ dir\nrm -r tmp\\ dir\n",
+		"ls \\h",
+		"echo escape:\\\\",
+		"echo thisIsAnd\\&");
+test($problem, \@tries);
+
+print "\nI/O redirection\n";
+my @tries = (	"\nls /bin > ElizaShell/tmp.txt",
+                "ls > blah/file.txt",
+		"echo < ElizaShell/tmp.txt",
+		"ls /bla 2> ElizaShell/tmp.txt",
+		"ls -altr 2> ElizaShell/tmp.txt 2> ElizaShell/othertmp.txt",
+		"ls -altr > &",
+		"ls -altr /etc & < ElizaShell/tmp.txt\n",
+		"ls -altr 2> <");
+test($problem, \@tries);
+
+print "\nPassed $passed of $total tests.\n";
+
+sub test {
+  my ($problem, $vals) = @_;
+
+  foreach $val (@{ $vals }) {
+    $total ++;
+    my $pr = $val;
+    $pr =~ s/\n/\\n/g;
+    print pad("  Trying with script '$pr'", 60);
+
+    open (MYFILE, '> .data');
+    print MYFILE $val;
+    close(MYFILE);
+
+    system("./$SHELL < .data > .actual 2>&1");
+    system("$SOLDIR$SHELL < .data > .expected 2>&1");
+    my $diff = `diff -W 200 .expected .actual | egrep "^([<>]|Binary)"`;
+    if ($diff) {
+      $diff = `diff -y -W 200 .expected .actual`;
+    }
+    `rm .actual .expected .data`;
+
+    if (! $diff) {
+      $passed++;
+      print "[PASS]\n";
+    } else {
+      print "[FAIL]\n";
+      print "    Command was:\n$pr\n    Diff in expected output:\n$diff\n";
+    }
+  }
+}
+
+sub error {
+  my ($msg) = @_;
+  print "ERROR: $msg\n";
+  exit(1);
+}
+
+sub pad {
+  my ($name, $len) = @_;
+  while (length($name) < $len) {
+    $name = "$name ";
+  }
+  if (length($name) > $len) {
+    $name = substr($name, 0, $len-3) . "...";
+  }
+  return $name;
+}
+
+sub random {
+  my ($len) = @_;
+
+  my @chars=('a'..'z','A'..'Z','0'..'9','_');
+  my $random_string;
+  foreach (1..$len) {
+    $random_string.=$chars[rand @chars];
+  }
+
+  return $random_string;
+}
+
