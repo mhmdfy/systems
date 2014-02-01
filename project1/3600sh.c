@@ -1,11 +1,8 @@
 /**
  * CS3600, Spring 2013
- * Project 1 Starter Code
- * (c) 2013 Alan Mislove
- *
- * You should use this (very simple) starter code as a basis for 
- * building your shell.  Please see the project handout for more
- * details.
+ * Project 1 Shell
+ * Emily Montgomery, Mohammad Al Yahya
+ * Prof. Alan Mislove
  */
 
 #include "3600sh.h"
@@ -42,6 +39,7 @@ int main(int argc, char*argv[]) {
     if(SHOULD_EXIT){
       do_exit();
     }
+
     // Get user information.
     user = getenv("USER");
     gethostname(host, 100);
@@ -61,6 +59,7 @@ int main(int argc, char*argv[]) {
     if(INVALID){
       printf("Error: Invalid syntax.\n"); 
     }
+    // check to see if we got a bad escape character
     else if(BAD_ESCAPE){
       printf("Error: Unrecognized escape sequence.\n");
     }
@@ -81,7 +80,7 @@ void getargs(char cmd[], int *argcp, char *argv[]){
   int i = 0;
   char *wordp;
 
-  // Set file variables to null.
+  // Set global variables to initial value.
   IN = NULL;
   OUT = NULL;
   ERR = NULL;
@@ -112,8 +111,9 @@ void getargs(char cmd[], int *argcp, char *argv[]){
   argv[i] = wordp;
   *argcp = i;
   
-  // Figure out the file redirection characters.
+  // Figure out if the process is background. 
   background(argv);
+  // Check to see if there are redirection characters.
   redirect(argv);
 }
 
@@ -122,11 +122,12 @@ char* getword(char * begin, char **endp){
   int i = 0;
   char* word = (char*) calloc(MAX, sizeof(char));
 
-  // Gets rid of leading zeros
+  // Gets rid of leading spaces and tabs
   while(*begin == ' ' || *begin == '\t'){
     begin++;
   }
 
+  // If the word starts with &, just return that.
   if(*begin == '&'){
    word[0] = '&';
    word[1] = '\0';
@@ -134,8 +135,10 @@ char* getword(char * begin, char **endp){
    return word;
   }
 
-  // Have end point to the end of the word
+  // Have end point to the end of the word.
   char* end = begin;
+
+  // Figure out when the word ends.
   while(*end != '\0' && *end != '\n' && *end != ' ' && *end != EOF && *end != '&' && *end != '\t'){
     if(*end == '\\'){//escape characters
       end++;
@@ -154,6 +157,7 @@ char* getword(char * begin, char **endp){
     return NULL;
   }
 
+  // Exclude the & and the end of the word from the word.
   if(*end == '&'){
     end--;
   }
@@ -207,7 +211,9 @@ void redirect(char* argv[]){
   }
 }
 
-
+// Returns 1 if the string is NULL or one of:
+// >, <, 2>, &.
+// 0 otherwise.
 int redirectChar(char* file) {
   if(file == NULL)
     return 1;
@@ -220,7 +226,7 @@ int redirectChar(char* file) {
 
 // searches the arguments for background processes
 // if there is change the background indicator to true,
-// if & is incorrectly used print invalid
+// if & is incorrectly used set invalid to true.
 void background(char* argv[]){
   int i = 0;
   while(argv[i] != NULL){
@@ -237,7 +243,8 @@ void background(char* argv[]){
   }
 }
 
-// handles escape characters
+// Returns the value of the escape character,
+// sets bad escape to 1 if it is invalid.
 char escape(char c){
   if(c == 't')
     return '\t';
@@ -249,14 +256,14 @@ char escape(char c){
   }  
 }
 
-// Executes the command by forking a child and waiting for it.
+// Executes the command by forking a child and waiting for it (if it wasn't background).
 void execute(char *argv[]) {
   pid_t pid = fork();
   if(pid < 0) {
     printf("Error: Couldn't fork\n");
     exit(1);
   }
-  else if(pid == 0) {
+  else if(pid == 0) { // Child
     int fd;
     if(OUT != NULL) {
       if((fd = open(OUT, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR)) < 0){
@@ -290,7 +297,7 @@ void execute(char *argv[]) {
     }
     exit(1);
   }
-  else {
+  else { // Parent
     if(!IS_BACKGROUND){
       waitpid(pid, NULL, 0);//not background
     }
@@ -298,7 +305,6 @@ void execute(char *argv[]) {
 }
 
 // Function which exits, printing the necessary message
-//
 void do_exit() {
   printf("So long and thanks for all the fish!\n");
   exit(0);
