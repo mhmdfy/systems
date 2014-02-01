@@ -8,6 +8,9 @@ all: $(TARGET)
 test: all
 	./test
 
+ourTest: all
+	./ourTest
+
 clean:
 	rm $(TARGET)
 

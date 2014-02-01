@@ -24,51 +24,41 @@ my ($f4, $t4) = tempfile($pattern, UNLINK => 1);
 my $total = 0;
 my $passed = 0;
 
-print "Milestone tests\n";
-my @tries = (	"ls",
-		"ls ~/tmp\ncat /etc/hostname",
-		"uname -a\ntime\n/bin/ls",
-		"stat /home\n",
-		"opdpfo\nmfdoimfo",
-		"ls a b c d e f g h i\n",
-		"pwd\nls\npwd\nls\nuname -a\nuname-a\nls\n",
-		"whoami\nwho am i\nwhoami who am i",
-                "ls /bin > $t1\ncat $t1\n\n",
-                "wc < $t1 > $t2\ncat $t2",
-                "ls /mfmfoifoi 2> $t1\ncat $t1");
+print "Regular Commmands\n";
+my @tries = (	"\tls /bin",
+		"ls -altr   /bin  ",
+		"ls -al /bin\n\n",
+		"      ls \t -a            -l /bin\n",
+		"blah",
+		"./3600sh.c",
+		"whoami",
+		"ls a",
+                "-l ls");
 test($problem, \@tries);
 
-print "\nFinal project tests\n";
-my @tries = (	"ls foo\\ bar",
-		"ls \\\\baz\\ foo\\ bah\\\\\\ ",
-		"ls -altr a\\&b",
-		"ls -altr a>b b<a",
-		"ls -altr a\\tcad\n",
-		"ls -altr /etc &\n",
-		"ls -altr /bin > $t1\ncat $t1\nls -altr /bin > $t1\ncat $t1",
-                "ls -altr /bin < $t1 > $t2 2> $t3\ncat $t1\ncat $t2\ncat $t3",
-		"ls a b c d e f g h i j k\n\n\n\n",
-		"ls a b c d e f g h i j k l m n o p q r s t u v w x y z");
+print "\nBackground Commands\n";
+my @tries = (	"ls -a /bin&",
+		"   ls  -a  /bin     & ",
+		"ls & -a");
 test($problem, \@tries);
 
-print "\nStress tests\n";
-my @tries = (	"ls \\8",
-		"ls -al /bin        ",
-		"ls  -a     /bin",
-		"     ls -a        -l                                                       -t   -r         -n -o                     -i              -h             /bin",
-		"ls \\ \\\\ \\ \\a",
-		"ls\t-altr\t/etc",
-		"ls -altr /etc &", 
-		"ls\t-altr /etc   &      ",
-		"ls & ls\n   \n\t\n",
-		"ls >",
-		"ls < /fdiononiono",
-		"ls < 2>",
-		"ls & < foo\n",
-		"ls -a < foo bar",
-		"./3600sh.c a b",
-		"fndsiofnsodfnsof",
-		"& & & ls");
+print "\nEscape Characters\n";
+my @tries = (	"echo foo\\ bar\\tbaz",
+		"mkdir tmp\\ dir\nls   tmp\\ dir\nrm -r tmp\\ dir\n",
+		"ls \\h",
+		"echo escape:\\\\",
+		"echo thisIsAnd\\&");
+test($problem, \@tries);
+
+print "\nI/O redirection\n";
+my @tries = (	"\nls /bin > ElizaShell/tmp.txt",
+                "ls > blah/file.txt",
+		"echo < ElizaShell/tmp.txt",
+		"ls /bla 2> ElizaShell/tmp.txt",
+		"ls -altr 2> ElizaShell/tmp.txt 2> ElizaShell/othertmp.txt",
+		"ls -altr > &",
+		"ls -altr /etc & < ElizaShell/tmp.txt\n",
+		"ls -altr 2> <");
 test($problem, \@tries);
 
 print "\nPassed $passed of $total tests.\n";
