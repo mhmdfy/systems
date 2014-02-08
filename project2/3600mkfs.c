@@ -121,9 +121,9 @@ vcb vcbSetUp() {
   vcb myvcb;
   myvcb.magic = 2633;
   myvcb.blocksize = BLOCKSIZE;
-  myvcb.de_start = 0;
-  myvcb.de_length = 0;
-  myvcb.fat_start = 0;
+  myvcb.de_start = 1;
+  myvcb.de_length = 100;
+  myvcb.fat_start = 101;
   myvcb.fat_length = 0;
   myvcb.db_start = 0;
 
