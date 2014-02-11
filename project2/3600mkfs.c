@@ -9,66 +9,7 @@
  * your disk file).
  */
 
-#include <math.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#include "3600fs.h"
-#include "disk.h"
-
-// Structure for Volume Control Block (VCB)
-// It is the first block, and has the information for the file system.
-typedef struct vcb_s {
-  // a magic number to identify your disk
-  int magic;
-
-  //description of the disk layout
-  int blocksize;
-  int de_start;
-  int de_length;
-  int fat_start;
-  int fat_length;
-  int db_start;
-  
-  // metadata for the root directory
-  uid_t user;
-  gid_t group;
-  mode_t mode;
-  struct timespec access_time;
-  struct timespec modify_time;
-  struct timespec create_time;
-} vcb;
-
-// Structure for Directory Entries (DE)
-// They are the blocks that have data on each file in the system.
-typedef struct dirent_s {
-  unsigned int valid;
-  unsigned int first_block;
-  unsigned int size;
-
-  // meadata for the file
-  uid_t user;
-  gid_t group;
-  mode_t mode;
-  struct timespec access_time;
-  struct timespec modify_time;
-  struct timespec create_time;
-  char name[27];
-} dirent;
-
-// Structure for File Allocation Table (FAT)
-// It is a table of pointers to the actual data.
-typedef struct fatent_s {
-  unsigned int used:1;
-  unsigned int eof:1;
-  unsigned int next:30;
-} fatent;
-
+#include "3600mkfs.h"
 
 void myformat(int size) {
   // Do not touch or move this function
@@ -113,13 +54,14 @@ vcb readVCB(){
   memset(tmp, 0, BLOCKSIZE);
   dread(0, tmp);
   memcpy(&myvcb, tmp, sizeof(vcb));
-  return vcb;
+  return myvcb;
 }
 
 // Sets up the vcb
 vcb vcbSetUp() {
   vcb myvcb;
   myvcb.magic = 2633;
+  myvcb.crashed = 0;
   myvcb.blocksize = BLOCKSIZE;
   myvcb.de_start = 1;
   myvcb.de_length = 100;
@@ -130,9 +72,6 @@ vcb vcbSetUp() {
   myvcb.user = getuid();
   myvcb.group = getgid();
   myvcb.mode = 0777;
-  myvcb.access_time = 0;
-  myvcb.modify_time = 0;
-  myvcb.create_time = 0;
 
   return myvcb;
 }
