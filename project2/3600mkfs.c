@@ -11,70 +11,6 @@
 
 #include "3600mkfs.h"
 
-void myformat(int size) {
-  // Do not touch or move this function
-  dcreate_connect();
-
-  /* 3600: FILL IN CODE HERE.  YOU SHOULD INITIALIZE ANY ON-DISK
-           STRUCTURES TO THEIR INITIAL VALUE, AS YOU ARE FORMATTING
-           A BLANK DISK.  YOUR DISK SHOULD BE size BLOCKS IN SIZE. */
-
-  /* 3600: AN EXAMPLE OF READING/WRITING TO THE DISK IS BELOW - YOU'LL
-           WANT TO REPLACE THE CODE BELOW WITH SOMETHING MEANINGFUL. */
-
-  // first, create a zero-ed out array of memory  
-  char *tmp = (char *) malloc(BLOCKSIZE);
-  memset(tmp, 0, BLOCKSIZE);
-
-  // now, write that to every block
-  for (int i=0; i<size; i++) 
-    if (dwrite(i, tmp) < 0) 
-      perror("Error while writing to disk");
-  // voila! we now have a disk containing all zeros
-
-  // Writing VCB to the first block of the disk.
-  writeVCB(vcbSetUp());
-
-  // Do not touch or move this function
-  dunconnect();
-}
-
-// Write into the vcb
-void writeVCB(vcb myvcb){
-  char tmp[BLOCKSIZE];
-  memset(tmp, 0, BLOCKSIZE);
-  memcpy(tmp, &myvcb, sizeof(vcb));
-  dwrite(0, tmp);
-}
-
-// Read from the vcb
-vcb readVCB(){
-  vcb myvcb;
-  char tmp[BLOCKSIZE];
-  memset(tmp, 0, BLOCKSIZE);
-  dread(0, tmp);
-  memcpy(&myvcb, tmp, sizeof(vcb));
-  return myvcb;
-}
-
-// Sets up the vcb
-vcb vcbSetUp() {
-  vcb myvcb;
-  myvcb.magic = 2633;
-  myvcb.crashed = 0;
-  myvcb.blocksize = BLOCKSIZE;
-  myvcb.de_start = 1;
-  myvcb.de_length = 100;
-  myvcb.fat_start = 101;
-  myvcb.fat_length = 0;
-  myvcb.db_start = 0;
-
-  myvcb.user = getuid();
-  myvcb.group = getgid();
-  myvcb.mode = 0777;
-
-  return myvcb;
-}
 
 int main(int argc, char** argv) {
   // Do not touch this function
@@ -87,4 +23,31 @@ int main(int argc, char** argv) {
   unsigned long size = atoi(argv[1]);
   printf("Formatting the disk with size %lu \n", size);
   myformat(size);
+}
+
+void myformat(int size) {
+  // Do not touch or move this function
+  dcreate_connect();
+
+  /* 3600: FILL IN CODE HERE.  YOU SHOULD INITIALIZE ANY ON-DISK
+           STRUCTURES TO THEIR INITIAL VALUE, AS YOU ARE FORMATTING
+           A BLANK DISK.  YOUR DISK SHOULD BE size BLOCKS IN SIZE. */
+
+  /* 3600: AN EXAMPLE OF READING/WRITING TO THE DISK IS BELOW - YOU'LL
+           WANT TO REPLACE THE CODE BELOW WITH SOMETHING MEANINGFUL. */
+
+  // Writing VCB to the first block of the disk.
+  writeVCB(vcbSetUp(size));
+
+  // write a zero-ed block to each other block of the disk.
+  char *tmp = (char *) malloc(BLOCKSIZE);
+  memset(tmp, 0, BLOCKSIZE);
+
+  for (int i=1; i<size; i++) 
+    if (dwrite(i, tmp) < 0) 
+      perror("Error while writing to disk");
+  // voila! we now have a disk containing all zeros
+
+  // Do not touch or move this function
+  dunconnect();
 }

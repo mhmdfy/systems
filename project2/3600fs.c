@@ -17,26 +17,11 @@
 #endif
 
 #define _POSIX_C_SOURCE 199309
-
-#include <time.h>
-#include <fuse.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <dirent.h>
-#include <errno.h>
-#include <assert.h>
-#include <sys/statfs.h>
-
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
 #endif
 
 #include "3600fs.h"
-#include "disk.h"
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -55,6 +40,10 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 
   /* 3600: YOU SHOULD ADD CODE HERE TO CHECK THE CONSISTENCY OF YOUR DISK
            AND LOAD ANY DATA STRUCTURES INTO MEMORY */
+  vcb myvcb = readVCB();
+  if(myvcb.crashed == 0)
+    myvcb.crashed = 1;
+  writeVCB(myvcb);
 
   return NULL;
 }
@@ -69,6 +58,9 @@ static void vfs_unmount (void *private_data) {
   /* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
            ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
            KEEP DATA CACHED THAT'S NOT ON DISK */
+  vcb myvcb = readVCB();
+  myvcb.crashed = 0;
+  writeVCB(myvcb);
 
   // Do not touch or move this code; unconnects the disk
   dunconnect();
