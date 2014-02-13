@@ -37,16 +37,11 @@ void myformat(int size) {
            WANT TO REPLACE THE CODE BELOW WITH SOMETHING MEANINGFUL. */
 
   // Writing VCB to the first block of the disk.
-  writeVCB(vcbSetUp(size));
+  vcb myvcb = vcbSetUp(size);
+  writeVCB(myvcb);
 
-  // write a zero-ed block to each other block of the disk.
-  char *tmp = (char *) malloc(BLOCKSIZE);
-  memset(tmp, 0, BLOCKSIZE);
-
-  for (int i=1; i<size; i++) 
-    if (dwrite(i, tmp) < 0) 
-      perror("Error while writing to disk");
-  // voila! we now have a disk containing all zeros
+  for (int i=myvcb.de_start; i<myvcb.de_length; i++) 
+    deSetUp(i);
 
   // Do not touch or move this function
   dunconnect();

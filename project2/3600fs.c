@@ -41,8 +41,17 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
   /* 3600: YOU SHOULD ADD CODE HERE TO CHECK THE CONSISTENCY OF YOUR DISK
            AND LOAD ANY DATA STRUCTURES INTO MEMORY */
   vcb myvcb = readVCB();
+  if(myvcb.magic != getMagic()){
+    perror("The file system is not me");
+    exit(-1);
+  }
+
   if(myvcb.crashed == 0)
     myvcb.crashed = 1;
+  else {
+    perror("The file system crashed last time and could be currepted");
+    exit(-1);
+  }
   writeVCB(myvcb);
 
   return NULL;
