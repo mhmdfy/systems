@@ -75,3 +75,5 @@ vcb vcbSetUp(int size);
 void deSetUp(int i);
 
 void writeDE(int i, de myde);
+
+de readDE(int i);

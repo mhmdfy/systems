@@ -74,3 +74,13 @@ void writeDE(int i, de myde) {
   if(dwrite(i, tmp) < 0)
     perror("Error while writing to disk");
 }
+
+de readDE(int i){
+   de myde;
+  char tmp[BLOCKSIZE];
+  memset(tmp, 0, BLOCKSIZE);
+  if(dread(i, tmp) < 0)
+    perror("Error while readin to disk");
+  memcpy(&myde, tmp, sizeof(de));
+  return myde;
+}
