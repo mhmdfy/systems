@@ -29,16 +29,8 @@ void myformat(int size) {
   // Do not touch or move this function
   dcreate_connect();
 
-  /* 3600: FILL IN CODE HERE.  YOU SHOULD INITIALIZE ANY ON-DISK
-           STRUCTURES TO THEIR INITIAL VALUE, AS YOU ARE FORMATTING
-           A BLANK DISK.  YOUR DISK SHOULD BE size BLOCKS IN SIZE. */
-
-  /* 3600: AN EXAMPLE OF READING/WRITING TO THE DISK IS BELOW - YOU'LL
-           WANT TO REPLACE THE CODE BELOW WITH SOMETHING MEANINGFUL. */
-
   // Writing VCB to the first block of the disk.
   vcb myvcb = vcbSetUp(size);
-  writeVCB(myvcb);
 
   for (int i=myvcb.de_start; i<myvcb.de_length; i++) 
     deSetUp(i);

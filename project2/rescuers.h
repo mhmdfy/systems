@@ -66,14 +66,14 @@ typedef struct fatent_s {
 
 int getMagic();
 
-void writeVCB(vcb myvcb);
-
 vcb readVCB();
 
-vcb vcbSetUp(int size);
+void writeVCB(vcb myvcb);
 
-void deSetUp(int i);
+de readDE(int i);
 
 void writeDE(int i, de myde);
 
-de readDE(int i);
+vcb vcbSetUp(int size);
+
+de deSetUp(int i);

@@ -25,6 +25,20 @@
 
 vcb MYVCB;
 
+// Looks through the DEs for path and save it to myde.
+// if found return 1, else return 0.
+static int findDE(const char* path, de* myde) {
+  int i;
+  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    &myde = readDE(i);
+    if(strcmp(myde->name, path) == 0){
+      return 1;
+    }
+  }
+  return 0;
+}
+
+
 /*
  * Initialize filesystem. Read in file system metadata and initialize
  * memory structures. If there are inconsistencies, now would also be
@@ -97,15 +111,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
   /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
   de myde;
-  int i;
-  int found = 0;
-  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
-    myde = readDE(i);
-    if(strcmp(myde.name, path) == 0){
-      found = 1;
-      break;
-    }
-  }
+  findDE(path, *myde);
 
   if(!found || (myde.valid == 0)){
     perror("This file does not exist.");

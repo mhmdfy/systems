@@ -5,15 +5,6 @@
 
 int getMagic() { return  1971083015; }
 
-// Write into the vcb
-void writeVCB(vcb myvcb){
-  char tmp[BLOCKSIZE];
-  memset(tmp, 0, BLOCKSIZE);
-  memcpy(tmp, &myvcb, sizeof(vcb));
-  if(dwrite(0, tmp) < 0)
-    perror("Error while writing to disk");
-}
-
 // Read from the vcb
 vcb readVCB(){
   vcb myvcb;
@@ -24,6 +15,36 @@ vcb readVCB(){
   memcpy(&myvcb, tmp, sizeof(vcb));
   return myvcb;
 }
+
+// Write into the vcb
+void writeVCB(vcb myvcb){
+  char tmp[BLOCKSIZE];
+  memset(tmp, 0, BLOCKSIZE);
+  memcpy(tmp, &myvcb, sizeof(vcb));
+  if(dwrite(0, tmp) < 0)
+    perror("Error while writing to disk");
+}
+
+// Reads from the i-th DE
+de readDE(int i){
+   de myde;
+  char tmp[BLOCKSIZE];
+  memset(tmp, 0, BLOCKSIZE);
+  if(dread(i, tmp) < 0)
+    perror("Error while readin to disk");
+  memcpy(&myde, tmp, sizeof(de));
+  return myde;
+}
+
+// Writes into the i-th DE
+void writeDE(int i, de myde) {
+  char tmp[BLOCKSIZE];
+  memset(tmp, 0, BLOCKSIZE);
+  memcpy(tmp, &myde, sizeof(de));
+  if(dwrite(i, tmp) < 0)
+    perror("Error while writing to disk");
+}
+
 
 // Sets up the vcb
 vcb vcbSetUp(int size) {
@@ -47,10 +68,12 @@ vcb vcbSetUp(int size) {
   clock_gettime(CLOCK_REALTIME, &myvcb.modify_time);
   clock_gettime(CLOCK_REALTIME, &myvcb.modify_time);
 
- return myvcb;
+  writeVCB(myvcb);
+  return myvcb;
 }
 
-void deSetUp(int i) {
+// Sets up the i-th DE
+de deSetUp(int i) {
   de myde;
   //myde.name = {};
   myde.valid = 0;
@@ -65,22 +88,5 @@ void deSetUp(int i) {
   clock_gettime(CLOCK_REALTIME, &myde.modify_time);
 
   writeDE(i, myde);
-}
-
-void writeDE(int i, de myde) {
-  char tmp[BLOCKSIZE];
-  memset(tmp, 0, BLOCKSIZE);
-  memcpy(tmp, &myde, sizeof(de));
-  if(dwrite(i, tmp) < 0)
-    perror("Error while writing to disk");
-}
-
-de readDE(int i){
-   de myde;
-  char tmp[BLOCKSIZE];
-  memset(tmp, 0, BLOCKSIZE);
-  if(dread(i, tmp) < 0)
-    perror("Error while readin to disk");
-  memcpy(&myde, tmp, sizeof(de));
   return myde;
 }
