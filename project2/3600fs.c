@@ -17,26 +17,13 @@
 #endif
 
 #define _POSIX_C_SOURCE 199309
-
-#include <time.h>
-#include <fuse.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <dirent.h>
-#include <errno.h>
-#include <assert.h>
-#include <sys/statfs.h>
-
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
 #endif
 
 #include "3600fs.h"
-#include "disk.h"
+
+vcb MYVCB;
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -55,6 +42,19 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 
   /* 3600: YOU SHOULD ADD CODE HERE TO CHECK THE CONSISTENCY OF YOUR DISK
            AND LOAD ANY DATA STRUCTURES INTO MEMORY */
+  MYVCB = readVCB();
+  if(MYVCB.magic != getMagic()){
+    perror("The file system is not me");
+    exit(-1);
+  }
+
+  if(MYVCB.crashed == 0)
+    MYVCB.crashed = 1;
+  else {
+    perror("The file system crashed last time and could be currepted");
+    exit(-1);
+  }
+  writeVCB(MYVCB);
 
   return NULL;
 }
@@ -69,6 +69,8 @@ static void vfs_unmount (void *private_data) {
   /* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
            ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
            KEEP DATA CACHED THAT'S NOT ON DISK */
+  MYVCB.crashed = 0;
+  writeVCB(MYVCB);
 
   // Do not touch or move this code; unconnects the disk
   dunconnect();
@@ -94,21 +96,35 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   stbuf->st_blksize = BLOCKSIZE;
 
   /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
-  
-  /*
-  if (The path represents the root directory)
+  de myde;
+  int i;
+  int found = 0;
+  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    myde = readDE(i);
+    if(strcmp(myde.name, path) == 0){
+      found = 1;
+      break;
+    }
+  }
+
+  if(!found || (myde.valid == 0)){
+    perror("This file does not exist.");
+    return -ENOENT;
+  }
+
+  if (strcmp(path, "/")  == 0)//The path represents the root directory)
     stbuf->st_mode  = 0777 | S_IFDIR;
   else 
-    stbuf->st_mode  = <<file mode>> | S_IFREG;
+    stbuf->st_mode  = (myde.mode & 0x0000ffff) | S_IFREG;
 
-  stbuf->st_uid     = // file uid
-  stbuf->st_gid     = // file gid
-  stbuf->st_atime   = // access time 
-  stbuf->st_mtime   = // modify time
-  stbuf->st_ctime   = // create time
-  stbuf->st_size    = // file size
-  stbuf->st_blocks  = // file size in blocks
-    */
+  stbuf->st_uid     = myde.user;// file uid
+  stbuf->st_gid     = myde.group;// file gid
+  stbuf->st_atime   = myde.access_time.tv_sec;// access time 
+  stbuf->st_mtime   = myde.modify_time.tv_sec;// modify time
+  stbuf->st_ctime   = myde.create_time.tv_sec;// create time
+  stbuf->st_size    = myde.size;// file size
+  stbuf->st_blocks  = myde.size/BLOCKSIZE;// file size in blocks
+    
 
   return 0;
 }
@@ -155,8 +171,11 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
+  if(strcmp(path, "/") == 0){
 
-    return 0;
+  }      
+  perror("Directory does not exist.");
+  return -1;
 }
 
 /*
@@ -165,7 +184,38 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-    return 0;
+  de myde;
+  int i;
+  int found = 0;
+  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    myde = readDE(i);
+    if(strcmp(myde.name, path) == 0){
+      found = 1;
+      break;
+    }
+  }
+
+  if(found){
+    perror("This file already exists.");
+    return -1;
+  }
+  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    myde = readDE(i);
+    if(myde.valid == 0){
+      myde.valid = 1;
+      myde.user = geteuid();
+      myde.group = getegid();
+      clock_gettime(CLOCK_REALTIME, &myde.access_time);
+      clock_gettime(CLOCK_REALTIME, &myde.modify_time);
+      clock_gettime(CLOCK_REALTIME, &myde.create_time);
+      myde.mode = mode;
+      strcpy(myde.name, path);
+      writeDE(i, myde);
+      return 0;
+    }
+  }
+  perror("The disk is full.");
+  return -1;
 }
 
 /*
@@ -218,8 +268,18 @@ static int vfs_delete(const char *path)
 
   /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
-
-    return 0;
+  de myde;
+  int i;
+  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    myde = readDE(i);
+    if(strcmp(myde.name, path) == 0){
+      myde.valid = 0;
+      writeDE(i, myde);
+      return 0;
+    }
+  }
+  perror("File not found.");
+  return -1;
 }
 
 /*
@@ -231,8 +291,18 @@ static int vfs_delete(const char *path)
  */
 static int vfs_rename(const char *from, const char *to)
 {
-
-    return 0;
+  de myde;
+  int i;
+  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    myde = readDE(i);
+    if(strcmp(myde.name, from) == 0){
+      strcpy(myde.name, to);
+      writeDE(i, myde);
+      return 0;
+    }
+  }
+  perror("File not found.");
+  return -1;
 }
 
 
@@ -247,8 +317,18 @@ static int vfs_rename(const char *from, const char *to)
  */
 static int vfs_chmod(const char *file, mode_t mode)
 {
-
-    return 0;
+  de myde;
+  int i;
+  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    myde = readDE(i);
+    if(strcmp(myde.name, file) == 0){
+      myde.mode = (mode & 0x0000ffff);    
+      writeDE(i, myde);
+      return 0;
+    }
+  }
+  perror("File not found.");
+  return -1;
 }
 
 /*
@@ -258,8 +338,19 @@ static int vfs_chmod(const char *file, mode_t mode)
  */
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
-
-    return 0;
+  de myde;
+  int i;
+  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    myde = readDE(i);
+    if(strcmp(myde.name, file) == 0){
+      myde.user = uid;
+      myde.group = gid;
+      writeDE(i, myde);
+      return 0;
+    }
+  }
+  perror("File not found.");
+  return -1;
 }
 
 /*
@@ -268,8 +359,19 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
  */
 static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
-
-    return 0;
+  de myde;
+  int i;
+  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    myde = readDE(i);
+    if(strcmp(myde.name, file) == 0){
+      myde.access_time = ts[0];
+      myde.modify_time = ts[1];
+      writeDE(i, myde);
+      return 0;
+    }
+  }
+  perror("File not found.");
+  return -1;
 }
 
 /*
