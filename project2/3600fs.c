@@ -169,11 +169,17 @@ static int vfs_mkdir(const char *path, mode_t mode) {
  *
  */
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-                       off_t offset, struct fuse_file_info *fi)
-{
+                       off_t offset, struct fuse_file_info *fi) {
   if(strcmp(path, "/") == 0){
-
-  }      
+  de myde;
+  int i;
+    for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+      myde = readDE(i);
+      if(filler(buf, myde.name, NULL, offset))
+        break;
+    }
+  return 0;
+  }
   perror("Directory does not exist.");
   return -1;
 }

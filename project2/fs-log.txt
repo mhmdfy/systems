@@ -1,0 +1,23 @@
+RUNNING './3600fs -s -d /tmp/3600fs.7DfEMl'
+fuse: failed to open /dev/fuse: Permission denied
+RUNNING './3600fs -s -d /tmp/3600fs.7DfEMl'
+fuse: mountpoint is not empty
+fuse: if you are sure this is safe, use the 'nonempty' mount option
+RUNNING './3600fs -s -d /tmp/3600fs.7DfEMl'
+fuse: mountpoint is not empty
+fuse: if you are sure this is safe, use the 'nonempty' mount option
+RUNNING './3600fs -s -d /tmp/3600fs.7DfEMl'
+fuse: mountpoint is not empty
+fuse: if you are sure this is safe, use the 'nonempty' mount option
+RUNNING './3600fs -s -d /tmp/3600fs.7DfEMl'
+fuse: mountpoint is not empty
+fuse: if you are sure this is safe, use the 'nonempty' mount option
+RUNNING './3600fs -s -d /tmp/3600fs.7DfEMl'
+fuse: mountpoint is not empty
+fuse: if you are sure this is safe, use the 'nonempty' mount option
+RUNNING './3600fs -s -d /tmp/3600fs.7DfEMl'
+fuse: mountpoint is not empty
+fuse: if you are sure this is safe, use the 'nonempty' mount option
+RUNNING './3600fs -s -d /tmp/3600fs.7DfEMl'
+fuse: mountpoint is not empty
+fuse: if you are sure this is safe, use the 'nonempty' mount option
