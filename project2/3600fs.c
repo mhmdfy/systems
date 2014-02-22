@@ -99,7 +99,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   de myde;
   int i;
   int found = 0;
-  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(strcmp(myde.name, path) == 0){
       found = 1;
@@ -170,15 +170,20 @@ static int vfs_mkdir(const char *path, mode_t mode) {
  */
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi) {
+  printf("path is: %s\n", path);
   if(strcmp(path, "/") == 0){
-  de myde;
-  int i;
-    for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+    de myde;
+    int i;
+    for(i = MYVCB.de_start + offset; i < MYVCB.de_start + MYVCB.de_length; i++){
       myde = readDE(i);
-      if(filler(buf, myde.name, NULL, offset))
-        break;
+      if(myde.valid) {
+        printf("file is valid: %s\n", myde.name);
+        char* string = myde.name + 1;
+        if(filler(buf, string, NULL, i + 1 - MYVCB.de_start) != 0)
+          return 0;
+      }
     }
-  return 0;
+    return 0;
   }
   perror("Directory does not exist.");
   return -1;
@@ -193,7 +198,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   de myde;
   int i;
   int found = 0;
-  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(strcmp(myde.name, path) == 0){
       found = 1;
@@ -205,7 +210,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     perror("This file already exists.");
     return -1;
   }
-  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(myde.valid == 0){
       myde.valid = 1;
@@ -276,7 +281,7 @@ static int vfs_delete(const char *path)
            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
   de myde;
   int i;
-  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(strcmp(myde.name, path) == 0){
       myde.valid = 0;
@@ -299,7 +304,7 @@ static int vfs_rename(const char *from, const char *to)
 {
   de myde;
   int i;
-  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(strcmp(myde.name, from) == 0){
       strcpy(myde.name, to);
@@ -325,7 +330,7 @@ static int vfs_chmod(const char *file, mode_t mode)
 {
   de myde;
   int i;
-  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(strcmp(myde.name, file) == 0){
       myde.mode = (mode & 0x0000ffff);    
@@ -346,7 +351,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
   de myde;
   int i;
-  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(strcmp(myde.name, file) == 0){
       myde.user = uid;
@@ -367,7 +372,7 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
   de myde;
   int i;
-  for(i = MYVCB.de_start; i < MYVCB.de_length; i++){
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(strcmp(myde.name, file) == 0){
       myde.access_time = ts[0];
