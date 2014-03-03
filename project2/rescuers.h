@@ -58,11 +58,11 @@ typedef struct de_s {
 
 // Structure for File Allocation Table (FAT)
 // It is a table of pointers to the actual data.
-typedef struct fatent_s {
+typedef struct fat_s {
   unsigned int used:1;
   unsigned int eof:1;
   unsigned int next:30;
-} fatent;
+} fat;
 
 int getMagic();
 
@@ -77,3 +77,11 @@ void deSetUp(int i);
 void writeDE(int i, de myde);
 
 de readDE(int i);
+
+void writeFAT(int i, fat myfat, int fatstart);
+
+fat readFAT(int i, int fatstart);
+
+void writeDATA(int i, char* data);
+
+void readDATA(int i, char* data);

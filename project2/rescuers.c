@@ -84,3 +84,53 @@ de readDE(int i){
   memcpy(&myde, tmp, sizeof(de));
   return myde;
 }
+
+void writeFAT(int i, fat myfat, int fatstart) {
+  int blocknum = i/128 + fatstart;
+  int blockent = i%128;
+  char tmp[BLOCKSIZE];
+  char fattmp[32];
+  memcpy(fattmp, &myfat, sizeof(fat));
+  readDATA(blocknum, tmp);
+  int k = 0;
+  int j = 0;
+  for(k = 0; k < BLOCKSIZE; k++) {
+    if(k >= blockent && j < 32){
+      tmp[k] = fattmp[j];
+      j++;
+    }
+  }
+  if(dwrite(i, tmp) < 0)
+    perror("Error while writing to disk");
+}
+
+fat readFAT(int i, int fatstart){
+  int blocknum = i/128 + fatstart;
+  int blockent = i%128;
+  fat myfat;
+  char tmp[BLOCKSIZE];
+  char fattmp[32];
+  memset(tmp, 0, BLOCKSIZE);
+  if(dread(blocknum, tmp) < 0)
+    perror("Error while readin to disk");
+  int k = 0;
+  int j = 0;
+  for(k = 0; k < BLOCKSIZE; k++) {
+    if(k >= blockent && j < 32) {
+      fattmp[j] = tmp[k];
+      j++;
+    }
+  }
+  memcpy(&myfat, fattmp, sizeof(fat));
+  return myfat;
+}
+
+void writeDATA(int i, char* data) {
+  if(dwrite(i, data) < 0)
+    perror("Error while writing to disk");
+}
+
+void readDATA(int i, char* data){
+  if(dread(i, data) < 0)
+    perror("Error while readin to disk");
+}

@@ -243,10 +243,48 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
  *
  */
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
-                    struct fuse_file_info *fi)
-{
-
-    return 0;
+                    struct fuse_file_info *fi){
+  de myde;
+  int i;
+  int read = 0;
+  fat myfat;
+  int index;
+  char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
+    myde = readDE(i);
+    if(strcmp(myde.name, path) == 0 && myde.valid){
+      if(myde.first_block != 0){
+        index = myde.first_block;
+        while(offset >= 512){
+          myfat = readFAT(index, MYVCB.fat_start);
+          if(myfat.used && !myfat.eof){
+            index = myfat.next;
+          }else{
+            perror("Data does not exist.");
+            return -1;
+          }
+          offset = offset-512;
+        }
+        while(size > 0){
+          if(*data == '\0'){
+            myfat = readFAT(index, MYVCB.fat_start);
+            index = myfat.next;
+          }
+          readDATA(index, data);
+          data = data + offset;
+          offset = 0;
+          while(*data != '\0' && size > 0){
+            *buf = * data;
+            read++;
+            size--;
+          }
+        }
+      }
+      return read;
+    }
+  }
+  perror("The file does not exist");
+  return -1;
 }
 
 /*
