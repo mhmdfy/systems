@@ -274,15 +274,15 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
           readDATA(index, data);
           datasize = offset;
           offset = 0;
-          while(datasize != BLOCKSIZE && size > 0){
+          while((datasize != BLOCKSIZE) && (size > 0)){
             *buf = *(data+datasize);
             buf++;
             read++;
             size--;
             datasize++;
           }
-          *buf = '\0';
         }
+        *buf = '\0';
       }
      clock_gettime(CLOCK_REALTIME, &myde.access_time);
      writeDE(i, myde);
@@ -360,9 +360,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         }
         datasize = offset;
         offset = 0;
-        while(datasize < BLOCKSIZE && *buf != '\0' && size > 0) {
+        while((datasize != BLOCKSIZE) && (size > 0)) {
           *(data+datasize) = *buf;
-          data++;
           buf++;
           written++;
           size--;
