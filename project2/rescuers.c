@@ -54,7 +54,7 @@ void deSetUp(int i) {
   de myde;
   //myde.name = {};
   myde.valid = 0;
-  myde.first_block = 0;
+  myde.first_block = -1;
   myde.size = 0;
 
   myde.user = getuid();
