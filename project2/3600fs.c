@@ -250,6 +250,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   fat myfat;
   int index;
   char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
+  int datasize = 0;
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(strcmp(myde.name, path) == 0 && myde.valid){
@@ -266,19 +267,19 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
           offset = offset-512;
         }
         while(size > 0){
-          if(*data == '\0'){
+          if(datasize == BLOCKSIZE) {
             myfat = readFAT(index, MYVCB.fat_start);
             index = myfat.next;
           }
           readDATA(index, data);
-          data = data + offset;
+          datasize = offset;
           offset = 0;
-          while(*data != '\0' && size > 0){
-            *buf = * data;
-            data++;
+          while(datasize != BLOCKSIZE && size > 0){
+            *buf = *(data+datasize);
             buf++;
             read++;
             size--;
+            datasize++;
           }
           *buf = '\0';
         }
@@ -329,10 +330,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
-  //TODO size!
+  //TODO fix size when overwriteing data!
   de myde;
   int i;
-  int writen = 0;
+  int written = 0;
   fat myfat;
   int index;
   char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
@@ -340,6 +341,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++ ) {
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, path) == 0) {
+      myde.size = myde.size + size; // Temporary fix!
       index = myde.first_block;
       while(offset >= 512) {
         myfat = readFAT(index, MYVCB.fat_start);
@@ -356,18 +358,17 @@ static int vfs_write(const char *path, const char *buf, size_t size,
           myfat = readFAT(index, MYVCB.fat_start);
           index = newBlock(index, myfat);
         }
-        data = data + offset;
-        datasize = datasize + offset;
+        datasize = offset;
         offset = 0;
         while(datasize < BLOCKSIZE && *buf != '\0' && size > 0) {
-          *data = *buf;
+          *(data+datasize) = *buf;
           data++;
           buf++;
           written++;
           size--;
           datasize++;
         }
-        *data = '\0';
+        *(data+datasize) = '\0';
         writeDATA(index, data);
       }
       clock_gettime(CLOCK_REALTIME, &myde.access_time);
@@ -385,10 +386,10 @@ static void cleanBlocks(int index)
   if(index != 0) {
     fat myfat = readFAT(index, MYVCB.fat_start);
     while(myfat.used) {
-      if(!myfat.eof) 
-        index = myfat.next;
       myfat.used = 0;
       writeFAT(index, myfat, MYVCB.fat_start);
+      if(!myfat.eof) 
+        index = myfat.next;
       myfat = readFAT(index, MYVCB.fat_start);
     }
   }
