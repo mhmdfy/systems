@@ -336,6 +336,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   fat myfat;
   int index;
   char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
+  int datasize = 0;
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++ ) {
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, path) == 0) {
@@ -351,18 +352,20 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         offset = offset - 512;
       }
       while(size > 0) {
-        if(*data == '\0') {
+        if(datasize == BLOCKSIZE) {
           myfat = readFAT(index, MYVCB.fat_start);
           index = newBlock(index, myfat);
         }
         data = data + offset;
+        datasize = datasize + offset;
         offset = 0;
-        while(*data != '\0' && *buf != '\0' && size > 0) {
+        while(datasize < BLOCKSIZE && *buf != '\0' && size > 0) {
           *data = *buf;
           data++;
           buf++;
-          writen++;
+          written++;
           size--;
+          datasize++;
         }
         *data = '\0';
         writeDATA(index, data);
@@ -370,7 +373,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       clock_gettime(CLOCK_REALTIME, &myde.access_time);
       clock_gettime(CLOCK_REALTIME, &myde.modify_time);
       writeDE(i, myde);
-      return writen;
+      return written;
     }
   }
   perror("The file does not exist.\n");
