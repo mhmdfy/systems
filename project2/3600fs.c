@@ -44,14 +44,14 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
            AND LOAD ANY DATA STRUCTURES INTO MEMORY */
   MYVCB = readVCB();
   if(MYVCB.magic != getMagic()){
-    perror("The file system is not me");
+    perror("The file system is not me\n");
     exit(-1);
   }
 
   if(MYVCB.crashed == 0)
     MYVCB.crashed = 1;
   else {
-    perror("The file system crashed last time and could be currepted");
+    perror("The file system crashed last time and could be currepted\n");
     exit(-1);
   }
   writeVCB(MYVCB);
@@ -108,7 +108,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   }
 
   if(!found || (myde.valid == 0)){
-    perror("This file does not exist.");
+    perror("This file does not exist.\n");
     return -ENOENT;
   }
 
@@ -185,7 +185,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     }
     return 0;
   }
-  perror("Directory does not exist.");
+  perror("Directory does not exist.\n");
   return -1;
 }
 
@@ -207,7 +207,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   }
 
   if(found){
-    perror("This file already exists.");
+    perror("This file already exists.\n");
     return -1;
   }
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
@@ -225,7 +225,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
       return 0;
     }
   }
-  perror("The disk is full.");
+  perror("The disk is full.\n");
   return -1;
 }
 
@@ -260,7 +260,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
           if(myfat.used && !myfat.eof){
             index = myfat.next;
           }else{
-            perror("Data does not exist.");
+            perror("Data does not exist.\n");
             return -1;
           }
           offset = offset-512;
@@ -275,16 +275,41 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
           offset = 0;
           while(*data != '\0' && size > 0){
             *buf = * data;
+            data++;
+            buf++;
             read++;
             size--;
           }
+          *buf = '\0';
         }
       }
-      return read;
+     clock_gettime(CLOCK_REALTIME, &myde.access_time);
+     writeDE(i, myde);
+     return read;
     }
   }
-  perror("The file does not exist");
+  perror("The file does not exist.\n");
   return -1;
+}
+
+static int newBlock(int index, fat prev) {
+  int i;
+  fat myfat;
+  for(i = 0; i < MYVCB.fat_length*128; i++){
+    myfat = readFAT(i, MYVCB.fat_start);
+    if(!myfat.used) {
+      myfat.used = 1;
+      myfat.eof = 1;
+      char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
+      writeDATA(i, data);
+      // free(data);
+      writeFAT(i, myfat, MYVCB.fat_start);
+      break;
+    }
+  }
+  prev.next = i;
+  writeFAT(index, prev, MYVCB.fat_start);
+  return i;
 }
 
 /*
@@ -304,8 +329,66 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
+  //TODO size!
+  de myde;
+  int i;
+  int writen = 0;
+  fat myfat;
+  int index;
+  char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++ ) {
+    myde = readDE(i);
+    if(myde.valid && strcmp(myde.name, path) == 0) {
+      index = myde.first_block;
+      while(offset >= 512) {
+        myfat = readFAT(index, MYVCB.fat_start);
+        if(myfat.used && !myfat.eof) {
+          index = myfat.next;
+        }
+        else {
+          index = newBlock(index, myfat);
+        }
+        offset = offset - 512;
+      }
+      while(size > 0) {
+        if(*data == '\0') {
+          myfat = readFAT(index, MYVCB.fat_start);
+          index = newBlock(index, myfat);
+        }
+        data = data + offset;
+        offset = 0;
+        while(*data != '\0' && *buf != '\0' && size > 0) {
+          *data = *buf;
+          data++;
+          buf++;
+          writen++;
+          size--;
+        }
+        *data = '\0';
+        writeDATA(index, data);
+      }
+      clock_gettime(CLOCK_REALTIME, &myde.access_time);
+      clock_gettime(CLOCK_REALTIME, &myde.modify_time);
+      writeDE(i, myde);
+      return writen;
+    }
+  }
+  perror("The file does not exist.\n");
+  return -1;
+}
 
-  return 0;
+static void cleanBlocks(int index)
+{
+  if(index != 0) {
+    fat myfat = readFAT(index, MYVCB.fat_start);
+    while(myfat.used) {
+      if(!myfat.eof) 
+        index = myfat.next;
+      myfat.used = 0;
+      writeFAT(index, myfat, MYVCB.fat_start);
+      myfat = readFAT(index, MYVCB.fat_start);
+    }
+  }
 }
 
 /**
@@ -323,11 +406,12 @@ static int vfs_delete(const char *path)
     myde = readDE(i);
     if(strcmp(myde.name, path) == 0){
       myde.valid = 0;
+      cleanBlocks(myde.first_block);
       writeDE(i, myde);
       return 0;
     }
   }
-  perror("File not found.");
+  perror("File not found.\n");
   return -1;
 }
 
@@ -350,7 +434,7 @@ static int vfs_rename(const char *from, const char *to)
       return 0;
     }
   }
-  perror("File not found.");
+  perror("File not found.\n");
   return -1;
 }
 
@@ -376,7 +460,7 @@ static int vfs_chmod(const char *file, mode_t mode)
       return 0;
     }
   }
-  perror("File not found.");
+  perror("File not found.\n");
   return -1;
 }
 
@@ -398,7 +482,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
       return 0;
     }
   }
-  perror("File not found.");
+  perror("File not found.\n");
   return -1;
 }
 
@@ -419,7 +503,7 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
       return 0;
     }
   }
-  perror("File not found.");
+  perror("File not found.\n");
   return -1;
 }
 
@@ -433,8 +517,37 @@ static int vfs_truncate(const char *file, off_t offset)
 
   /* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
-
-    return 0;
+  de myde;
+  int i;
+  fat myfat;
+  int index;
+  char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
+  for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++) {
+    myde = readDE(i);
+    if(strcmp(myde.name, file) == 0) {
+      myde.size = offset;
+      index = myde.first_block;
+      while(offset >= 512) {
+        myfat = readFAT(index, MYVCB.fat_start);
+        if(myfat.used && !myfat.eof) {
+          index = myfat.next;
+        }
+        else {
+          perror("Offset is larger than file.\n");
+        }
+        offset = offset - 512;
+      }
+      readDATA(index, data);
+      *(data+offset) = '\0';
+      writeDATA(index, data);
+      myfat = readFAT(index, MYVCB.fat_start);  
+      cleanBlocks(myfat.next);
+      writeDE(i, myde);
+      return 0;
+    }
+  }
+  perror("File not found.\n");
+  return -1;
 }
 
 
