@@ -242,7 +242,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
  * HINT: You should be able to ignore 'fi'
  *
  */
-static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
+static int vfs_read1(const char *path, char *buf, size_t size, off_t offset,
                     struct fuse_file_info *fi){
   de myde;
   int i;
@@ -297,6 +297,26 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   perror("The file does not exist.\n");
   return -1;
 }
+
+
+static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
+                    struct fuse_file_info *fi){
+  //int i;
+  int index = 200;
+  //char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
+  //for(i = 0; i < 10; i++) *(data+i) = '2';
+  //*(data+i) = '\0';
+  fat myfat = readFAT(index, MYVCB.fat_start);
+  myfat.used = 1;
+  myfat.eof =  1;
+  writeFAT(index, myfat, MYVCB.fat_start);
+  
+  fat myfat2 = readFAT(index, MYVCB.fat_start);
+  if(myfat2.used && myfat2.eof) printf("it works\n");
+  else printf("it doesn't work\n");
+}
+
+
 
 static int newFirstBlock() {
   int i;
@@ -405,7 +425,7 @@ static int vfs_write1(const char *path, const char *buf, size_t size,
   return -1;
 }
 
-static int vfs_write(const char *path, const char *buf, size_t size,
+static int vfs_write2(const char *path, const char *buf, size_t size,
                      off_t offset, struct fuse_file_info *fi)
 {
   de myde;
@@ -430,6 +450,13 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   clock_gettime(CLOCK_REALTIME, &myde.modify_time);
   writeDE(i, myde);
   return j;
+}
+
+static int vfs_write(const char *path, const char *buf, size_t size,
+                     off_t offset, struct fuse_file_info *fi)
+{
+
+  return 0;
 }
 
 

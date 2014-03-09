@@ -43,7 +43,7 @@ typedef struct vcb_s {
 // They are the blocks that have data on each file in the system.
 typedef struct de_s {
   unsigned int valid;
-  unsigned int first_block;
+  int first_block;
   unsigned int size;
 
   // meadata for the file

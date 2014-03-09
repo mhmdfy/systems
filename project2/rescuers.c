@@ -35,8 +35,8 @@ vcb vcbSetUp(int size) {
   myvcb.crashed = 0;
   myvcb.blocksize = BLOCKSIZE;
   myvcb.de_start = 1;
-  myvcb.de_length = 100;//(size * 15/100)-1;
-  myvcb.fat_start = 101;//(size * 15/100);
+  myvcb.de_length = (size * 10/100); // 100
+  myvcb.fat_start = (size * 10/100) + 1; //101;
   myvcb.fat_length = 7;//(size * 20/100)-1;
   myvcb.db_start = 108;//(size * 20/100);
 
@@ -86,41 +86,52 @@ de readDE(int i){
 }
 
 void writeFAT(int i, fat myfat, int fatstart) {
+  int k = 0;
+  unsigned int j = 0;
   int blocknum = i/128 + fatstart;
   int blockent = i%128;
-  char tmp[BLOCKSIZE];
-  char fattmp[32];
+
+  char fattmp[sizeof(fat)];
   memcpy(fattmp, &myfat, sizeof(fat));
-  readDATA(blocknum, tmp);
-  int k = 0;
-  int j = 0;
+
+  //readDATA(blocknum, tmp);
+  char tmp[BLOCKSIZE];
+  memset(tmp, 0, BLOCKSIZE);
+  if(dread(blocknum, tmp) < 0)
+    perror("Error while reading to disk");
+
   for(k = 0; k < BLOCKSIZE; k++) {
-    if(k >= blockent && j < 32){
+    if(k >= blockent && j < sizeof(fat)){
       tmp[k] = fattmp[j];
       j++;
     }
   }
+
   if(dwrite(i, tmp) < 0)
     perror("Error while writing to disk");
 }
 
 fat readFAT(int i, int fatstart){
+  fat myfat;
+  int k = 0;
+  unsigned int j = 0;
   int blocknum = i/128 + fatstart;
   int blockent = i%128;
-  fat myfat;
+
+  char fattmp[sizeof(fat)];
+
   char tmp[BLOCKSIZE];
-  char fattmp[32];
   memset(tmp, 0, BLOCKSIZE);
   if(dread(blocknum, tmp) < 0)
-    perror("Error while readin to disk");
-  int k = 0;
-  int j = 0;
+    perror("Error while reading to disk");
+
   for(k = 0; k < BLOCKSIZE; k++) {
-    if(k >= blockent && j < 32) {
+    if(k >= blockent && j < sizeof(fat)) {
       fattmp[j] = tmp[k];
       j++;
     }
   }
+
   memcpy(&myfat, fattmp, sizeof(fat));
   return myfat;
 }
