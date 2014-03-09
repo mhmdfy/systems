@@ -86,54 +86,34 @@ de readDE(int i){
 }
 
 void writeFAT(int i, fat myfat, int fatstart) {
-  int k = 0;
-  unsigned int j = 0;
   int blocknum = i/128 + fatstart;
   int blockent = i%128;
 
-  char fattmp[sizeof(fat)];
-  memcpy(fattmp, &myfat, sizeof(fat));
-
   //readDATA(blocknum, tmp);
-  char tmp[BLOCKSIZE];
+  fat *tmp = (fat*) malloc(BLOCKSIZE);
+
   memset(tmp, 0, BLOCKSIZE);
-  if(dread(blocknum, tmp) < 0)
+  if(dread(blocknum, (void*) tmp) < 0)
     perror("Error while reading to disk");
 
-  for(k = 0; k < BLOCKSIZE; k++) {
-    if(k >= blockent && j < sizeof(fat)){
-      tmp[k] = fattmp[j];
-      j++;
-    }
-  }
+  tmp[blockent] = myfat;
 
-  if(dwrite(i, tmp) < 0)
+  if(dwrite(blocknum, (void*) tmp) < 0)
     perror("Error while writing to disk");
 }
 
+
 fat readFAT(int i, int fatstart){
-  fat myfat;
-  int k = 0;
-  unsigned int j = 0;
   int blocknum = i/128 + fatstart;
   int blockent = i%128;
 
-  char fattmp[sizeof(fat)];
+  fat *tmp = (fat*) malloc(BLOCKSIZE);
 
-  char tmp[BLOCKSIZE];
   memset(tmp, 0, BLOCKSIZE);
-  if(dread(blocknum, tmp) < 0)
+  if(dread(blocknum, (void*) tmp) < 0)
     perror("Error while reading to disk");
 
-  for(k = 0; k < BLOCKSIZE; k++) {
-    if(k >= blockent && j < sizeof(fat)) {
-      fattmp[j] = tmp[k];
-      j++;
-    }
-  }
-
-  memcpy(&myfat, fattmp, sizeof(fat));
-  return myfat;
+  return tmp[blockent];
 }
 
 void writeDATA(int i, char* data) {
