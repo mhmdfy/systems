@@ -255,9 +255,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(strcmp(myde.name, path) == 0 && myde.valid){
-      printf("first block = %d\n", myde.first_block);
       if(myde.first_block != -1) {
-        printf("inside first block\n");
         index = myde.first_block;
         while(offset >= 512){
           myfat = readFAT(index, MYVCB.fat_start);
@@ -269,7 +267,6 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
           }
           offset = offset-512;
         }
-        printf("size is : %d\n", size);
         while(size > 0){
           if(datasize == BLOCKSIZE) {
             myfat = readFAT(index, MYVCB.fat_start);
@@ -278,7 +275,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
           readDATA(index, data);
           datasize = offset;
           offset = 0;
-          printf("string is : %s\n", data);
+          printf("string is : %s for block %d size left is %d\n", data, index, size);
           while((datasize != BLOCKSIZE) && (size > 0)){
             *(buf+bufsize) = *(data+datasize);
             bufsize++;
@@ -298,27 +295,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   return -1;
 }
 
-
-static int vfs_read1(const char *path, char *buf, size_t size, off_t offset,
-                    struct fuse_file_info *fi){
-  //int i;
-  int index = 200;
-  //char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
-  //for(i = 0; i < 10; i++) *(data+i) = '2';
-  //*(data+i) = '\0';
-  fat myfat = readFAT(index, MYVCB.fat_start);
-  myfat.used = 1;
-  myfat.eof =  1;
-  writeFAT(index, myfat, MYVCB.fat_start);
-  
-  fat myfat2 = readFAT(index, MYVCB.fat_start);
-  if(myfat2.used && myfat2.eof) printf("it works\n");
-  else printf("it doesn't work\n");
-}
-
-
-
-static int newFirstBlock() {
+static int newBlock() {
   int i;
   fat myfat;
   for(i = 0; i < MYVCB.fat_length*128; i++){
@@ -336,7 +313,7 @@ static int newFirstBlock() {
   return i;
 }
 
-static int newBlock(int index, fat prev) {
+static int newBlock1(int index, fat prev) {
   int i;
   fat myfat;
   for(i = 0; i < MYVCB.fat_length*128; i++){
@@ -376,17 +353,21 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   //TODO fix size when overwriteing data!
   de myde;
   int i;
+  int prev_ind;
   int written = 0;
   fat myfat;
   int index;
   char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
   int datasize = 0;
+
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++ ) {
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, path) == 0) {
       myde.size = myde.size + size; // Temporary fix!
+  
+      // Get first block to write on (allocate new ones if we don't have enought)
       if(myde.first_block == -1)
-        myde.first_block = newFirstBlock();
+        myde.first_block = newBlock();
       index = myde.first_block;
       while(offset >= 512) {
         myfat = readFAT(index, MYVCB.fat_start);
@@ -394,17 +375,31 @@ static int vfs_write(const char *path, const char *buf, size_t size,
           index = myfat.next;
         }
         else {
-          index = newBlock(index, myfat);
+          prev_ind = index;
+          index = newBlock();
+          myfat.next = index;
+          myfat.eof = 0;
+          writeFAT(prev_ind, myfat, MYVCB.fat_start);
         }
         offset = offset - 512;
       }
+
+      // Write data from buf
       while(size > 0) {
-        if(datasize == BLOCKSIZE) {
+        // Get new block once the previous one is filled
+        if(datasize >= BLOCKSIZE) {
+          prev_ind = index;
           myfat = readFAT(index, MYVCB.fat_start);
-          index = newBlock(index, myfat);
+
+          index = newBlock();
+          myfat.next = index;
+          myfat.eof = 0;
+          writeFAT(prev_ind, myfat, MYVCB.fat_start);
+          printf("created new block i=%d\n", index);
         }
         datasize = offset;
         offset = 0;
+        // Copy buf to data 
         while((datasize != BLOCKSIZE) && (size > 0)) {
           *(data+datasize) = *buf;
           buf++;
@@ -424,41 +419,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   perror("The file does not exist.\n");
   return -1;
 }
-
-static int vfs_write2(const char *path, const char *buf, size_t size,
-                     off_t offset, struct fuse_file_info *fi)
-{
-  de myde;
-  int i;
-  int j; 
-  fat myfat;
-  char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
-  for(j = 0; j < 10; j++)
-    *(data+j) = '1';
-  *(data+j) = '\0';
-  printf("string is : %s\n", data);
-  for(i = MYVCB.de_start; i< MYVCB.de_start +MYVCB.de_length; i++) {
-    myde = readDE(i);
-    if(myde.valid && strcmp(myde.name, path) == 0) {
-      myde.size = myde.size + size;
-      myde.first_block= newFirstBlock();
-      printf("new first block = %d\n", myde.first_block);
-      writeDATA(myde.first_block, data);
-    }
-  }
-  clock_gettime(CLOCK_REALTIME, &myde.access_time);
-  clock_gettime(CLOCK_REALTIME, &myde.modify_time);
-  writeDE(i, myde);
-  return j;
-}
-
-static int vfs_write1(const char *path, const char *buf, size_t size,
-                     off_t offset, struct fuse_file_info *fi)
-{
-
-  return 0;
-}
-
 
 static void cleanBlocks(int index)
 {
