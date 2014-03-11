@@ -276,7 +276,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
             else
               perror("Data does not exists.\n");
           }
-          readDATA(index+MYVCB.fat_start+MYVCB.fat_length, data);
+          readDATA(index+MYVCB.db_start, data);
           datasize = offset;
           offset = 0;
           // Copy data to buf
@@ -309,7 +309,7 @@ static int newBlock() {
       myfat.used = 1;
       myfat.eof = 1;
       char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
-      writeDATA(i+MYVCB.fat_start+MYVCB.fat_length, data);
+      writeDATA(i+MYVCB.db_start, data);
       // free(data);
       writeFAT(i, myfat, MYVCB.fat_start);
       break;
@@ -415,7 +415,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
           datasize++;
         }
         *(data+datasize) = '\0';
-        writeDATA(index+MYVCB.fat_start+MYVCB.fat_length, data);
+        writeDATA(index+MYVCB.db_start, data);
       }
       clock_gettime(CLOCK_REALTIME, &myde.access_time);
       clock_gettime(CLOCK_REALTIME, &myde.modify_time);
@@ -587,9 +587,9 @@ static int vfs_truncate(const char *file, off_t offset)
         }
         offset = offset - 512;
       }
-      readDATA(index+MYVCB.fat_start+MYVCB.fat_length, data);
+      readDATA(index+MYVCB.db_start, data);
       *(data+offset) = '\0';
-      writeDATA(index+MYVCB.fat_start+MYVCB.fat_length, data);
+      writeDATA(index+MYVCB.db_start, data);
       myfat = readFAT(index, MYVCB.fat_start);  
       cleanBlocks(myfat.next);
       writeDE(i, myde);

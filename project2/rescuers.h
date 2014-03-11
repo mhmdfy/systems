@@ -13,8 +13,6 @@
 
 #define RESCUERS
 
-//int MAGIC; 
-
 // Structure for Volume Control Block (VCB)
 // It is the first block, and has the information for the file system.
 typedef struct vcb_s {
@@ -66,22 +64,23 @@ typedef struct fat_s {
 
 int getMagic();
 
-void writeVCB(vcb myvcb);
-
-vcb readVCB();
-
 vcb vcbSetUp(int size);
 
 void deSetUp(int i);
 
-void writeDE(int i, de myde);
+vcb readVCB();
+
+void writeVCB(vcb myvcb);
 
 de readDE(int i);
 
-void writeFAT(int i, fat myfat, int fatstart);
+void writeDE(int i, de myde);
 
 fat readFAT(int i, int fatstart);
 
-void writeDATA(int i, char* data);
+void writeFAT(int i, fat myfat, int fatstart);
 
 void readDATA(int i, char* data);
+
+void writeDATA(int i, char* data);
+

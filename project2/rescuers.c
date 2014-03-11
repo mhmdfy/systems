@@ -1,29 +1,7 @@
 
 #include "rescuers.h"
 
-//MAGIC = 1971083015;
-
 int getMagic() { return  1971083015; }
-
-// Write into the vcb
-void writeVCB(vcb myvcb){
-  char tmp[BLOCKSIZE];
-  memset(tmp, 0, BLOCKSIZE);
-  memcpy(tmp, &myvcb, sizeof(vcb));
-  if(dwrite(0, tmp) < 0)
-    perror("Error while writing to disk");
-}
-
-// Read from the vcb
-vcb readVCB(){
-  vcb myvcb;
-  char tmp[BLOCKSIZE];
-  memset(tmp, 0, BLOCKSIZE);
-  if(dread(0, tmp) < 0)
-    perror("Error while readin to disk");
-  memcpy(&myvcb, tmp, sizeof(vcb));
-  return myvcb;
-}
 
 // Sets up the vcb
 vcb vcbSetUp(int size) {
@@ -50,9 +28,9 @@ vcb vcbSetUp(int size) {
  return myvcb;
 }
 
+// Create the setup for de (block i)
 void deSetUp(int i) {
   de myde;
-  //myde.name = {};
   myde.valid = 0;
   myde.first_block = -1;
   myde.size = 0;
@@ -67,42 +45,43 @@ void deSetUp(int i) {
   writeDE(i, myde);
 }
 
-void writeDE(int i, de myde) {
+// Read from the vcb
+vcb readVCB(){
+  vcb myvcb;
   char tmp[BLOCKSIZE];
   memset(tmp, 0, BLOCKSIZE);
-  memcpy(tmp, &myde, sizeof(de));
-  if(dwrite(i, tmp) < 0)
-    perror("Error while writing to disk");
+  readDATA(0, tmp);
+  memcpy(&myvcb, tmp, sizeof(vcb));
+  return myvcb;
 }
 
-de readDE(int i){
-   de myde;
+// Write into the vcb
+void writeVCB(vcb myvcb){
   char tmp[BLOCKSIZE];
   memset(tmp, 0, BLOCKSIZE);
-  if(dread(i, tmp) < 0)
-    perror("Error while readin to disk");
+  memcpy(tmp, &myvcb, sizeof(vcb));
+  writeDATA(0, tmp);
+}
+
+// Read from de (block i)
+de readDE(int i){
+  de myde;
+  char tmp[BLOCKSIZE];
+  memset(tmp, 0, BLOCKSIZE);
+  readDATA(i, tmp);
   memcpy(&myde, tmp, sizeof(de));
   return myde;
 }
 
-void writeFAT(int i, fat myfat, int fatstart) {
-  int blocknum = i/128 + fatstart;
-  int blockent = i%128;
-
-  //readDATA(blocknum, tmp);
-  fat *tmp = (fat*) malloc(BLOCKSIZE);
-
+// Write into de (block i)
+void writeDE(int i, de myde) {
+  char tmp[BLOCKSIZE];
   memset(tmp, 0, BLOCKSIZE);
-  if(dread(blocknum, (void*) tmp) < 0)
-    perror("Error while reading to disk");
-
-  tmp[blockent] = myfat;
-
-  if(dwrite(blocknum, (void*) tmp) < 0)
-    perror("Error while writing to disk");
+  memcpy(tmp, &myde, sizeof(de));
+  writeDATA(i, tmp);
 }
 
-
+// Read from fat entry i
 fat readFAT(int i, int fatstart){
   int blocknum = i/128 + fatstart;
   int blockent = i%128;
@@ -110,18 +89,35 @@ fat readFAT(int i, int fatstart){
   fat *tmp = (fat*) malloc(BLOCKSIZE);
 
   memset(tmp, 0, BLOCKSIZE);
-  if(dread(blocknum, (void*) tmp) < 0)
-    perror("Error while reading to disk");
+  readDATA(blocknum, (void*) tmp);
 
   return tmp[blockent];
 }
 
+// Write into fat entry i
+void writeFAT(int i, fat myfat, int fatstart) {
+  int blocknum = i/128 + fatstart;
+  int blockent = i%128;
+
+  fat *tmp = (fat*) malloc(BLOCKSIZE);
+
+  memset(tmp, 0, BLOCKSIZE);
+  readDATA(blocknum, (void*) tmp);
+
+  tmp[blockent] = myfat;
+
+  writeDATA(blocknum, (void*) tmp);
+}
+
+// Read data from block i
+void readDATA(int i, char* data){
+  if(dread(i, data) < 0)
+    perror("Error while readin to disk");
+}
+
+// Write data into block i
 void writeDATA(int i, char* data) {
   if(dwrite(i, data) < 0)
     perror("Error while writing to disk");
 }
 
-void readDATA(int i, char* data){
-  if(dread(i, data) < 0)
-    perror("Error while readin to disk");
-}
