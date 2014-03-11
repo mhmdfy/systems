@@ -99,6 +99,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   de myde;
   int i;
   int found = 0;
+
+  // look for the de
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, path) == 0){
@@ -107,6 +109,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
     }
   }
 
+  // if the de was not found, exit
   if(!found || (myde.valid == 0)){
     perror("This file does not exist.\n");
     return -ENOENT;
@@ -125,7 +128,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   stbuf->st_size    = myde.size;// file size
   stbuf->st_blocks  = myde.size/BLOCKSIZE;// file size in blocks
     
-
   return 0;
 }
 
@@ -170,14 +172,16 @@ static int vfs_mkdir(const char *path, mode_t mode) {
  */
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi) {
-  printf("path is: %s\n", path);
+
+  //The path has to be the root (no sub directories)
   if(strcmp(path, "/") == 0){
     de myde;
     int i;
+    
+    // search for the de and pass name to filler
     for(i = MYVCB.de_start + offset; i < MYVCB.de_start + MYVCB.de_length; i++){
       myde = readDE(i);
       if(myde.valid) {
-        printf("file is valid: %s\n", myde.name);
         char* string = myde.name + 1;
         if(filler(buf, string, NULL, i + 1 - MYVCB.de_start) != 0)
           return 0;
@@ -198,6 +202,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   de myde;
   int i;
   int found = 0;
+
+  // Make sure that the name doesn't exists
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, path) == 0){
@@ -210,6 +216,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     perror("This file already exists.\n");
     return -1;
   }
+
+  // search for an empty de and create the file.
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(myde.valid == 0){
@@ -252,11 +260,17 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
   int datasize = 0;
   int bufsize = 0;
+
+  // Search for the de of the file
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
-    if(strcmp(myde.name, path) == 0 && myde.valid){
+    if(myde.valid && strcmp(myde.name, path) == 0){
+
+      // If it has a first block, start there.
       if(myde.first_block != -1) {
         index = myde.first_block;
+
+        // Get the block that agrees with the offset
         while(offset >= 512){
           myfat = readFAT(index, MYVCB.fat_start);
           if(myfat.used && !myfat.eof){
@@ -267,8 +281,10 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
           }
           offset = offset-512;
         }
+
+        // Read data
         while(size > 0){
-          // Read new block once we've read the prevtous one.
+          // Read new block once we've read the previous one.
           if(datasize >= BLOCKSIZE) {
             myfat = readFAT(index, MYVCB.fat_start);
             if(!myfat.eof)
@@ -276,9 +292,12 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
             else
               perror("Data does not exists.\n");
           }
+            
+          // Get the data from block
           readDATA(index+MYVCB.db_start, data);
           datasize = offset;
           offset = 0;
+
           // Copy data to buf
           printf("reading %s from block %d, size left is %d\n", data, index, size);
           while((datasize != BLOCKSIZE) && (size > 0)){
@@ -300,6 +319,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   return -1;
 }
 
+// Gets the first available block, and resturns its index
 static int newBlock() {
   int i;
   fat myfat;
@@ -315,26 +335,6 @@ static int newBlock() {
       break;
     }
   }
-  return i;
-}
-
-static int newBlock1(int index, fat prev) {
-  int i;
-  fat myfat;
-  for(i = 0; i < MYVCB.fat_length*128; i++){
-    myfat = readFAT(i, MYVCB.fat_start);
-    if(!myfat.used) {
-      myfat.used = 1;
-      myfat.eof = 1;
-      char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
-      writeDATA(i, data);
-      // free(data);
-      writeFAT(i, myfat, MYVCB.fat_start);
-      break;
-    }
-  }
-  prev.next = i;
-  writeFAT(index, prev, MYVCB.fat_start);
   return i;
 }
 
@@ -366,6 +366,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   int datasize = 0;
   int bufsize = 0;
 
+  // Get the de of the file
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++ ) {
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, path) == 0) {
@@ -375,6 +376,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       if(myde.first_block == -1)
         myde.first_block = newBlock();
       index = myde.first_block;
+
+      // Get the block that agrees with the offset
       while(offset >= 512) {
         myfat = readFAT(index, MYVCB.fat_start);
         if(myfat.used && !myfat.eof) {
@@ -403,8 +406,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
           writeFAT(prev_ind, myfat, MYVCB.fat_start);
           printf("created new block i=%d\n", index);
         }
+
         datasize = offset;
         offset = 0;
+
         // Copy buf to data 
         printf("writing %s to block %d, size left %d\n", buf, index, size);
         while((datasize != BLOCKSIZE) && (size > 0)) {
@@ -427,6 +432,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   return -1;
 }
 
+// Deletes all data blocks for fat entry index
 static void cleanBlocks(int index)
 {
   if(index != 0) {
@@ -452,6 +458,8 @@ static int vfs_delete(const char *path)
            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
   de myde;
   int i;
+
+  // locate the correct de and deletes it
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, path) == 0){
@@ -476,6 +484,8 @@ static int vfs_rename(const char *from, const char *to)
 {
   de myde;
   int i;
+
+  // locate the correct de and renames it
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, from) == 0){
@@ -487,7 +497,6 @@ static int vfs_rename(const char *from, const char *to)
   perror("File not found.\n");
   return -1;
 }
-
 
 /*
  * This function will change the permissions on the file
@@ -502,6 +511,8 @@ static int vfs_chmod(const char *file, mode_t mode)
 {
   de myde;
   int i;
+
+  // locate the de and changes its mode to mode
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, file) == 0){
@@ -523,6 +534,8 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
   de myde;
   int i;
+  
+  // locate the de and changes its uid and gid with given
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, file) == 0){
@@ -544,6 +557,8 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
   de myde;
   int i;
+
+  // locates the de and updates the file's times to given
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++){
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, file) == 0){
@@ -572,11 +587,15 @@ static int vfs_truncate(const char *file, off_t offset)
   fat myfat;
   int index;
   char* data = (char*) calloc(BLOCKSIZE, sizeof(char));
+
+  // Locate the de to truncate
   for(i = MYVCB.de_start; i < MYVCB.de_start + MYVCB.de_length; i++) {
     myde = readDE(i);
     if(myde.valid && strcmp(myde.name, file) == 0) {
       myde.size = offset;
       index = myde.first_block;
+ 
+      // get the data block that agrees with the offset
       while(offset >= 512) {
         myfat = readFAT(index, MYVCB.fat_start);
         if(myfat.used && !myfat.eof) {
@@ -587,6 +606,8 @@ static int vfs_truncate(const char *file, off_t offset)
         }
         offset = offset - 512;
       }
+
+      // replace the first truncated character to null character
       readDATA(index+MYVCB.db_start, data);
       *(data+offset) = '\0';
       writeDATA(index+MYVCB.db_start, data);
