@@ -90,11 +90,41 @@ int main(int argc, char *argv[]) {
    */
 
   // process the arguments
+  processArgs(argc, argv);
 
   // construct the DNS request
+  // initialize header
+  header h;
+  h.id = 1337;
+  h.qr = 0;
+  h.opcode = 0;
+  h.aa = 0;
+  h.tc = 0;
+  h.rd = 1;
+  h.ra = 0;
+  h.z = 0;
+  h.rcode = 0;
+  h.qdcount = 1;
+  h.ancount = 0;
+  h.nscount = 0;
+  h.arcount = 0;
+
+  // initialize question
+  question q;
+  q.qname = NAME;
+  q.qtype = FLAG;
+  q.qclass = 1;
+
+  // initialize request with header and question
+  request r;
+  r.h = h;
+  r.q = q;
 
   // send the DNS request (and call dump_packet with your request)
-  
+  unsigned char* query;
+  memcpy(query, &r, sizeof(request));
+  dump_packet(query, strlen(query));
+
   // first, open a UDP socket  
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
@@ -104,8 +134,9 @@ int main(int argc, char *argv[]) {
   out.sin_port = htons(PORT);
   out.sin_addr.s_addr = inet_addr(SERVER);
 
-  if (sendto(sock, <<your packet>>, <<packet len>>, 0, &out, sizeof(out)) < 0) {
+  if (sendto(sock, query, strlen(query), 0, &out, sizeof(out)) < 0) {
     // an error occurred
+    perror("");
   }
 
   // wait for the DNS reply (timeout: 5 seconds)
@@ -119,12 +150,14 @@ int main(int argc, char *argv[]) {
 
   // construct the timeout
   struct timeval t;
-  t.tv_sec = <<your timeout in seconds>>;
+  t.tv_sec = 5;
   t.tv_usec = 0;
 
+  unsigned char* response;
   // wait to receive, or for a timeout
   if (select(sock + 1, &socks, NULL, NULL, &t)) {
-    if (recvfrom(sock, <<your input buffer>>, <<input len>>, 0, &in, &in_len) < 0) {
+    // TODO comeback
+    if (recvfrom(sock, response, 0, 0, &in, &in_len) < 0) {
       // an error occured
     }
   } else {
@@ -141,12 +174,12 @@ void processArgs(int argc, char* argv[]) {
   if(argc == 4){
     processFlag(argv[1]);
     processServerPort(argv[2]);
-    NAME = argv[3];
+    processName(argv[3]);
   }
   else if(argc == 3) {
-    FLAG = "no flag";
+    FLAG = 1;
     processServerPort(argv[1]);
-    NAME = argv[2];
+    processName(argv[2]);
   }
   else {
     perror("Wrong number of arguments\nFormat is: ./3600dns [-ns|-mx] @<server:port> <name>\n");
@@ -155,8 +188,10 @@ void processArgs(int argc, char* argv[]) {
 }
 
 void processFlag(char* flag) {
-  if(strcmp(flag, "-ns") || strcmp(flag, "-mx"))
-    FLAG = flag;
+  if(strcmp(flag, "-ns"))
+    FLAG = 2;
+  else if(strcmp(flag, "-mx"))
+    FLAG = 15;
   else {
     perror("Invalid flag: should be [-ns|-mx]\n");
     exit(1);
@@ -169,21 +204,39 @@ void processServerPort(char* serverPort) {
   char* port = strtok(NULL, ":");
 
   if(port != NULL)
-    PORT = (short) strtol(port);
+    PORT = (short) atoi(port);
   else
     PORT = (short) 53;
 
   char* token = strtok(server, ".");
-  if(token < "0" || token > "255"){
-    perror("Invalid server format: should be a.b.c.d where a,b,c and d are between 0-255\n");
+  token++;
+  if(atoi(token) < 0 || atoi(token) > 255){
+    perror("Invalid server format: should be a.b.c.d\n");
     exit(1);
   }
   for(i = 0; i < 3; i++) {
     token = strtok(NULL, ".");
-    if(token < "0" || token > "255"){
+    if(atoi(token) < 0 || atoi(token) > 255){
       perror("Invalid server format: should be a.b.c.d where a,b,c and d are between 0-255\n");
       exit(1);
     }
   }
   SERVER = server; 
+}
+
+void processName(char* name) {
+  char* result;
+  result = "";
+  char* tmp;
+  char* token = strtok(name, ".");
+
+  while(token != NULL) {
+    *tmp = strlen(token);
+    result = strcat(result, strcat(tmp, token));
+    token = strtok(NULL, ".");
+  }
+  *tmp = 0;
+  result = strcat(result, tmp);
+
+  NAME = result;
 }
