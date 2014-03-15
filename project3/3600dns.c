@@ -225,18 +225,23 @@ void processServerPort(char* serverPort) {
 }
 
 void processName(char* name) {
-  char* result;
-  result = "";
-  char* tmp;
-  char* token = strtok(name, ".");
+  char result[256];
+  int i = 0;
+  int c = 0;
+  int len = 0;
 
+  char* token = strtok(name, ".");
   while(token != NULL) {
-    *tmp = strlen(token);
-    result = strcat(result, strcat(tmp, token));
+    len = strlen(token);
+    result[c] = len;
+    c++;
+    for(i = 0; i < len; i++) {
+      result[c] = token[i];
+      c++;
+    }
     token = strtok(NULL, ".");
   }
-  *tmp = 0;
-  result = strcat(result, tmp);
-
+  result[c] = 0;
+  result[c+1] = '\0';
   NAME = result;
 }
