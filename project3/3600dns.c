@@ -208,7 +208,9 @@ void processServerPort(char* serverPort) {
   else
     PORT = (short) 53;
 
-  char* token = strtok(server, ".");
+  char* token = malloc(strlen(server));
+  strcpy(token, server);
+  token = strtok(token, ".");
   token++;
   if(atoi(token) < 0 || atoi(token) > 255){
     perror("Invalid server format: should be a.b.c.d\n");
