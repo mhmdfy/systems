@@ -8,33 +8,42 @@
 #ifndef __3600DNS_H__
 #define __3600DNS_H__
 
-int FLAG;
-char* SERVER;
+unsigned int SIZE;
+unsigned int FLAG;
+unsigned char* SERVER;
 short PORT;
-char* NAME;
-
+unsigned char* NAME;
+unsigned char* ANSWER_NAME;
 
 typedef struct header_s {
-  int id:16;
-  int qr:1;
-  int opcode:4;
-  int aa:1;
-  int tc:1; 
-  int rd:1;
-  int ra:1;
-  int z:3;
-  int rcode:4;
-  int qdcount:16;
-  int ancount:16;
-  int nscount: 16;
-  int arcount: 16;
+  unsigned int id:16;
+  unsigned int rd:1; // backward
+  unsigned int tc:1;
+  unsigned int aa:1;
+  unsigned int opcode:4;
+  unsigned int qr:1; // 8
+  unsigned int rcode:4; // backward
+  unsigned int z:3;
+  unsigned int ra:1; // 8
+  unsigned int qdcount:16;
+  unsigned int ancount:16;
+  unsigned int nscount: 16;
+  unsigned int arcount: 16;
 } header;
 
 typedef struct queston_s {
-  char* qname;
-  int qtype:16;
-  int qclass:16;
+//  unsigned char* qname;
+  unsigned int qtype:16;
+  unsigned int qclass:16;
 } question;
+
+typedef struct answer_s {
+//  unsigned char* aname;
+  unsigned int atype:16;
+  unsigned int aclass:16;
+  unsigned int ttl:32;
+  unsigned int rdlen:16;
+} answer;
 
 typedef struct request_s {
   header h;
@@ -45,6 +54,7 @@ void processArgs(int argc, char* argv[]);
 void processFlag(char* flag);
 void processServerPort(char* serverPort);
 void processName(char* name);
+void checkAnswer(header h);
 
 #endif
 

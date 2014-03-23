@@ -95,25 +95,26 @@ int main(int argc, char *argv[]) {
   // construct the DNS request
   // initialize header
   header h;
-  h.id = 1337;
+  h.id = htons(1337);
   h.qr = 0;
   h.opcode = 0;
   h.aa = 0;
   h.tc = 0;
+  h.rd = 0;
   h.rd = 1;
   h.ra = 0;
   h.z = 0;
   h.rcode = 0;
-  h.qdcount = 1;
-  h.ancount = 0;
-  h.nscount = 0;
-  h.arcount = 0;
+  h.qdcount = htons(1);
+  h.ancount = htons(0);
+  h.nscount = htons(0);
+  h.arcount = htons(0);
 
   // initialize question
   question q;
-  q.qname = NAME;
-  q.qtype = FLAG;
-  q.qclass = 1;
+ // q.qname = NAME;
+  q.qtype = htons(FLAG);
+  q.qclass = htons(1);
 
   // initialize request with header and question
   request r;
@@ -121,9 +122,12 @@ int main(int argc, char *argv[]) {
   r.q = q;
 
   // send the DNS request (and call dump_packet with your request)
-  unsigned char* query;
-  memcpy(query, &r, sizeof(request));
-  dump_packet(query, strlen(query));
+  unsigned char* query = malloc(SIZE+16);
+  memset(query, 0, SIZE+16);
+  memcpy(query, &h, 12);
+  memcpy(query+12, NAME, SIZE);
+  memcpy(query+SIZE+12, &q, 4);
+  dump_packet(query, SIZE+16);
 
   // first, open a UDP socket  
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -134,9 +138,9 @@ int main(int argc, char *argv[]) {
   out.sin_port = htons(PORT);
   out.sin_addr.s_addr = inet_addr(SERVER);
 
-  if (sendto(sock, query, strlen(query), 0, &out, sizeof(out)) < 0) {
+  if (sendto(sock, query, SIZE+16, 0, &out, sizeof(out)) < 0) {
     // an error occurred
-    perror("");
+    perror("Error in sendto()\n");
   }
 
   // wait for the DNS reply (timeout: 5 seconds)
@@ -153,17 +157,33 @@ int main(int argc, char *argv[]) {
   t.tv_sec = 5;
   t.tv_usec = 0;
 
-  unsigned char* response;
+  unsigned char response[65536];
   // wait to receive, or for a timeout
   if (select(sock + 1, &socks, NULL, NULL, &t)) {
-    // TODO comeback
-    if (recvfrom(sock, response, 0, 0, &in, &in_len) < 0) {
+    if (recvfrom(sock, response, 65536, 0, &in, &in_len) < 0) {
       // an error occured
+      perror("Error in recvfrom()\n");
     }
   } else {
     // a timeout occurred
+    perror("Timeout: The response took more than 5 secs.\n");
   }
 
+  header h2;
+  memcpy(&h2, response, 12);
+  checkAnswer(h2);
+  char* qname = malloc(265);
+ // int len = getName(&qname, response, 12);
+  if(strcmp(NAME, qname) != 0){
+    perror("received response is for a different question\n");
+    exit(1);
+  }
+  question q2;
+  //memcpy(&q2, response+len+12, 4);
+ 
+  //getAnswerFormat(response);
+
+  //processResponse(); // TODO: implement
   // print out the result
   
   return 0;
@@ -223,14 +243,16 @@ void processServerPort(char* serverPort) {
       exit(1);
     }
   }
-  SERVER = server; 
+  SERVER = (server+1); 
 }
 
 void processName(char* name) {
-  char result[256];
   int i = 0;
   int c = 0;
   int len = 0;
+  SIZE = strlen(name) + 2;
+  char result[SIZE];
+  NAME = malloc(SIZE);
 
   char* token = strtok(name, ".");
   while(token != NULL) {
@@ -245,5 +267,47 @@ void processName(char* name) {
   }
   result[c] = 0;
   result[c+1] = '\0';
-  NAME = result;
+  memcpy(NAME, &result, SIZE);
+}
+
+void checkAnswer(header h) {
+  if(ntohs(h.id) != 1337){ // id has to be 1337
+    perror("This reply's id doesn't match the query\n");
+  }
+  if(h.qr != 1) { // indicate response
+    perror("This message is a query?\n"); 
+    exit(1);
+  }
+  if(h.aa != 1) { // Authoritative
+    //perror("This answer is not authoritative\n");
+  }
+  if(h.tc != 0) { // truncate
+    perror("This answer is truncated\n");
+    exit(1);
+  }
+  if(h.ra != 1) { // recursion
+    perror("This answer does not support recursion\n");
+    exit(1);
+  }
+  short rcode = ntohs(h.rcode);
+  if(rcode == 1) { // many cases 
+    perror("The name server was unable to interpret the query\n");
+    exit(1);
+  }
+  if(rcode == 2) {
+    perror("Server faliure\n");
+    exit(2);
+  }
+  if(rcode == 3) {
+    perror("Name Error\n");
+  }
+  if(rcode == 4) {
+    perror("Not implemented\n");
+    exit(4);
+  }
+  if(rcode == 5) {
+    perror("Refused\n");
+    exit(5);
+  }
+
 }
