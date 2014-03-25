@@ -157,6 +157,7 @@ int main(int argc, char *argv[]) {
   t.tv_sec = 5;
   t.tv_usec = 0;
 
+  //******RESPONSE
   unsigned char response[65536];
   // wait to receive, or for a timeout
   if (select(sock + 1, &socks, NULL, NULL, &t)) {
@@ -171,17 +172,23 @@ int main(int argc, char *argv[]) {
 
   header h2;
   memcpy(&h2, response, 12);
-  checkAnswer(h2);
+  checkHeader(h2);
   char* qname = malloc(265);
- // int len = getName(&qname, response, 12);
-  if(strcmp(NAME, qname) != 0){
+  int qlen = getName(&qname, response, 12);
+  char* oname = malloc(265);
+  getName(&oname, NAME, 0);
+  if(strcmp(oname, qname) != 0){
     perror("received response is for a different question\n");
     exit(1);
   }
   question q2;
-  //memcpy(&q2, response+len+12, 4);
- 
-  //getAnswerFormat(response);
+  memcpy(&q2, response+qlen+12, 4);
+  char* aname = malloc(265);
+  int alen = 0; 
+  do{
+    alen = getName(&aname, response, qlen+16);
+    memcpy(&a, response+qlen+16+alen, 10);
+  }while(alen >2);
 
   //processResponse(); // TODO: implement
   // print out the result
@@ -270,7 +277,7 @@ void processName(char* name) {
   memcpy(NAME, &result, SIZE);
 }
 
-void checkAnswer(header h) {
+void checkHeader(header h) {
   if(ntohs(h.id) != 1337){ // id has to be 1337
     perror("This reply's id doesn't match the query\n");
   }
@@ -279,7 +286,7 @@ void checkAnswer(header h) {
     exit(1);
   }
   if(h.aa != 1) { // Authoritative
-    //perror("This answer is not authoritative\n");
+    NONAUTH = 1;
   }
   if(h.tc != 0) { // truncate
     perror("This answer is truncated\n");
@@ -309,5 +316,26 @@ void checkAnswer(header h) {
     perror("Refused\n");
     exit(5);
   }
+}
 
+int getName(char** name, char* response, int offset){
+  int n = 0;
+  int r = offset;
+  int chars = response[r];
+  r++;
+  while(chars > 0){
+    int i = 0;
+    for(i = 0; i<chars; i++){
+      (*name)[n] = response[r];
+      r++;
+      n++;
+    }
+    chars = response[r];
+    r++;
+    (*name)[n] = '.';
+    n++;
+  }
+  n--;
+  (*name)[n] = '\0';
+  return n+2;
 }

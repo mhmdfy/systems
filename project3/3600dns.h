@@ -14,6 +14,7 @@ unsigned char* SERVER;
 short PORT;
 unsigned char* NAME;
 unsigned char* ANSWER_NAME;
+int NONAUTH;
 
 typedef struct header_s {
   unsigned int id:16;
@@ -54,7 +55,7 @@ void processArgs(int argc, char* argv[]);
 void processFlag(char* flag);
 void processServerPort(char* serverPort);
 void processName(char* name);
-void checkAnswer(header h);
+void checkHeader(header h);
 
 #endif
 
