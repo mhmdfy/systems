@@ -112,7 +112,6 @@ int main(int argc, char *argv[]) {
 
   // initialize question
   question q;
- // q.qname = NAME;
   q.qtype = htons(FLAG);
   q.qclass = htons(1);
 
@@ -157,7 +156,7 @@ int main(int argc, char *argv[]) {
   t.tv_sec = 5;
   t.tv_usec = 0;
 
-  //******RESPONSE
+  /*******RESPONSE*******/
   unsigned char response[65536];
   // wait to receive, or for a timeout
   if (select(sock + 1, &socks, NULL, NULL, &t)) {
@@ -167,31 +166,55 @@ int main(int argc, char *argv[]) {
     }
   } else {
     // a timeout occurred
-    perror("Timeout: The response took more than 5 secs.\n");
+    //perror("Timeout: The response took more than 5 secs.\n");
+    printf("NORESPONSE\n");
+    return 1;
   }
 
+  // Getting header from response
   header h2;
   memcpy(&h2, response, 12);
-  checkHeader(h2);
-  char* qname = malloc(265);
-  int qlen = getName(&qname, response, 12);
+  int ancount = checkHeader(h2);
+
+  // got question but no answer
+  if(ancount == 0) {
+    printf("NOTFOUND\n");
+    return 1;
+  }
+
+  // answer is corrupted
+  if(ancount < 0)
+    return 1;
+
+  // Getting the name for the original question
   char* oname = malloc(265);
   getName(&oname, NAME, 0);
+
+  // Getting question from response and comparing with original
+  char* qname = malloc(265);
+  int qlen = getName(&qname, response, 12);
   if(strcmp(oname, qname) != 0){
     perror("received response is for a different question\n");
     exit(1);
   }
   question q2;
   memcpy(&q2, response+qlen+12, 4);
-  char* aname = malloc(265);
-  int alen = 0; 
-  do{
-    alen = getName(&aname, response, qlen+16);
-    memcpy(&a, response+qlen+16+alen, 10);
-  }while(alen >2);
 
-  //processResponse(); // TODO: implement
   // print out the result
+  // Getting answers and printing them
+  answer a;
+  int i = 0;
+  int alen = 0;
+  int offset = qlen+16; 
+  char* aname = malloc(265);
+ 
+  for(i = 0; i < ancount; i++) {
+    alen = getName(&aname, response, offset);
+    memcpy(&a, response+offset+alen, 10);
+    offset = offset + alen + 10;
+    
+    offset = printAnswer(a, response, offset);
+  }
   
   return 0;
 }
@@ -215,9 +238,9 @@ void processArgs(int argc, char* argv[]) {
 }
 
 void processFlag(char* flag) {
-  if(strcmp(flag, "-ns"))
+  if(strcmp(flag, "-ns") == 0)
     FLAG = 2;
-  else if(strcmp(flag, "-mx"))
+  else if(strcmp(flag, "-mx") == 0)
     FLAG = 15;
   else {
     perror("Invalid flag: should be [-ns|-mx]\n");
@@ -277,55 +300,80 @@ void processName(char* name) {
   memcpy(NAME, &result, SIZE);
 }
 
-void checkHeader(header h) {
+int checkHeader(header h) {
   if(ntohs(h.id) != 1337){ // id has to be 1337
-    perror("This reply's id doesn't match the query\n");
+    printf("ERROR\tReceived different id from the one sent\n");
+    return -1;
   }
   if(h.qr != 1) { // indicate response
-    perror("This message is a query?\n"); 
-    exit(1);
+    printf("ERROR\tReceived a question instead of a response\n");
+    return -1;
   }
-  if(h.aa != 1) { // Authoritative
-    NONAUTH = 1;
-  }
+  if(h.aa == 1) // Authoritative
+    AUTH = 1;
+  else
+    AUTH = 0;
+
   if(h.tc != 0) { // truncate
-    perror("This answer is truncated\n");
-    exit(1);
+    printf("ERROR\tThe answer is truncated\n");
+    return -1;
   }
   if(h.ra != 1) { // recursion
-    perror("This answer does not support recursion\n");
-    exit(1);
+    printf("ERROR\tThis answer does not support recursion\n");
+    return -1;
   }
   short rcode = ntohs(h.rcode);
   if(rcode == 1) { // many cases 
-    perror("The name server was unable to interpret the query\n");
-    exit(1);
+    printf("ERROR\tThe name server was unable to interpret the query\n");
+    return -1;
   }
   if(rcode == 2) {
-    perror("Server faliure\n");
-    exit(2);
+    printf("ERROR\tServer faliure\n");
+    return -1;
   }
   if(rcode == 3) {
-    perror("Name Error\n");
+    printf("ERROR\tName Error\n");
+    return -1;
   }
   if(rcode == 4) {
-    perror("Not implemented\n");
-    exit(4);
+    printf("ERROR\tNot implemented\n");
+    return -1;
   }
   if(rcode == 5) {
-    perror("Refused\n");
-    exit(5);
+    printf("ERROR\tRefused\n");
+    return -1;
   }
+
+  int qdcount = ntohs(h.qdcount);
+  if(qdcount != 1) {
+    printf("ERROR\tInvalid number for questions\n");
+    return -1;
+  }
+  
+  int ancount = ntohs(h.ancount);
+  return ancount;
 }
 
 int getName(char** name, char* response, int offset){
   int n = 0;
+  int pointer = 0;
   int r = offset;
-  int chars = response[r];
+  unsigned short chars = response[r];
   r++;
+
   while(chars > 0){
+
+    if(chars >= 192){
+      r = ((chars & 63) << 8) | response[r];
+      chars = response[r];
+      r++;
+
+      if(pointer == 0)
+        pointer = n+2;
+    }
+
     int i = 0;
-    for(i = 0; i<chars; i++){
+    for(i = 0; i < chars; i++){
       (*name)[n] = response[r];
       r++;
       n++;
@@ -337,5 +385,54 @@ int getName(char** name, char* response, int offset){
   }
   n--;
   (*name)[n] = '\0';
-  return n+2;
+  
+  if(pointer > 0)
+    return pointer;
+  else
+    return n+2;
 }
+
+int printAnswer(answer a, char* response, int offset) {
+  char* rdata = malloc(256);
+  int atype = ntohs(a.atype);
+  int rdlen = ntohs(a.rdlen);
+
+  if(atype == 1) { 
+    unsigned char first = response[offset];
+    unsigned char second = response[offset+1];
+    unsigned char third = response[offset+2];
+    unsigned char forth = response[offset+3];
+
+    printf("IP\t%d.%d.%d.%d\t", first, second, third, forth); 
+    offset = offset + rdlen;
+  }
+  else if(atype == 5) {
+    getName(&rdata, response, offset);
+    printf("CNAME\t%s\t", rdata); 
+    offset = offset + rdlen;
+  } 
+  else if(atype == 2) {
+    getName(&rdata, response, offset);
+    printf("NS\t%s\t", rdata);
+    offset = offset + rdlen;
+  }
+  else if(atype == 15) {
+    int pref = response[offset+1];
+    getName(&rdata, response, offset+2);
+    printf("MX\t%s\t%d\t", rdata, pref); 
+    offset = offset + rdlen;
+  }
+  else {
+    printf("type: %d vs %d\n", atype, a.atype);
+    perror("invalid type\n");
+    exit(10);
+  }
+
+  if(AUTH)
+    printf("auth\n");
+  else
+    printf("nonauth\n");
+
+  return offset;
+}
+

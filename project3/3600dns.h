@@ -14,7 +14,8 @@ unsigned char* SERVER;
 short PORT;
 unsigned char* NAME;
 unsigned char* ANSWER_NAME;
-int NONAUTH;
+int AUTH;
+int NORESPONSE;
 
 typedef struct header_s {
   unsigned int id:16;
@@ -33,13 +34,11 @@ typedef struct header_s {
 } header;
 
 typedef struct queston_s {
-//  unsigned char* qname;
   unsigned int qtype:16;
   unsigned int qclass:16;
 } question;
 
 typedef struct answer_s {
-//  unsigned char* aname;
   unsigned int atype:16;
   unsigned int aclass:16;
   unsigned int ttl:32;
@@ -55,7 +54,8 @@ void processArgs(int argc, char* argv[]);
 void processFlag(char* flag);
 void processServerPort(char* serverPort);
 void processName(char* name);
-void checkHeader(header h);
+int checkHeader(header h);
+int printAnswer(answer a, char* response, int offset);
 
 #endif
 
