@@ -176,11 +176,13 @@ int main(int argc, char *argv[]) {
   memcpy(&h2, response, 12);
   int ancount = checkHeader(h2);
 
+  // got question but no answer
   if(ancount == 0) {
     printf("NOTFOUND\n");
     return 1;
   }
 
+  // answer is corrupted
   if(ancount < 0)
     return 1;
 
@@ -396,8 +398,6 @@ int printAnswer(answer a, char* response, int offset) {
   int rdlen = ntohs(a.rdlen);
 
   if(atype == 1) { 
-    //memcpy(rdata, response+offset, rdlen);
-    //getName(&rdata, response, offset);
     unsigned char first = response[offset];
     unsigned char second = response[offset+1];
     unsigned char third = response[offset+2];
@@ -407,20 +407,17 @@ int printAnswer(answer a, char* response, int offset) {
     offset = offset + rdlen;
   }
   else if(atype == 5) {
-    //memcpy(rdata, response+offset, rdlen);
     getName(&rdata, response, offset);
     printf("CNAME\t%s\t", rdata); 
     offset = offset + rdlen;
   } 
   else if(atype == 2) {
-    //memcpy(rdata, response+offset, rdlen);
     getName(&rdata, response, offset);
     printf("NS\t%s\t", rdata);
     offset = offset + rdlen;
   }
   else if(atype == 15) {
     int pref = response[offset+1];
-    //memcpy(rdata, response+offset+16, rdlen-16);
     getName(&rdata, response, offset+2);
     printf("MX\t%s\t%d\t", rdata, pref); 
     offset = offset + rdlen;
