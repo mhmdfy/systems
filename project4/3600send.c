@@ -23,19 +23,53 @@
 #include "3600sendrecv.h"
 
 static int DATA_SIZE = 1460;
-
-unsigned int sequence = 0;
+int BUFFER_SIZE = 146000;
+char buffer[146000];
+int sentacked = 0;
+int sent = 0;
+int eof = 0;
 
 void usage() {
   printf("Usage: 3600send host:port\n");
   exit(1);
 }
 
+//reads from stdin and puts data into buffer
+int readin(int size){
+  int len = 0;
+  if(eof < sentacked){
+    if(eof+size <= sentacked){
+      len = read(0, buffer+eof, size);
+      eof = eof + len;
+    }
+  }
+  else{
+    if(eof+size <= BUFFER_SIZE){
+      len = read(0, buffer+eof, size);
+      eof = eof + len;
+      if(eof == BUFFER_SIZE)
+        eof = 0;
+    }
+  }
+  mylog("buf is : %s" buffer); 
+  return len;
+}
+
 /**
- * Reads the next block of data from stdin
+ * Reads the next block of data from the buffer
  */
 int get_next_data(char *data, int size) {
-  return read(0, data, size);
+  if(eof > sent){
+    if(eof-sent < size)
+      size = eof-sent;
+  }
+  else{
+    if(BUFFER_SIZE-sent < size)
+      size = BUFFER_SIZE-sent;
+  }
+  memcpy(data, buffer+sent, size);
+  sent = sent+size;
+  return size;
 }
 
 /**
@@ -64,7 +98,7 @@ void *get_next_packet(int sequence, int *len) {
   return packet;
 }
 
-int send_next_packet(int sock, struct sockaddr_in out) {
+int send_next_packet(int sequence, int sock, struct sockaddr_in out) {
   int packet_len = 0;
   void *packet = get_next_packet(sequence, &packet_len);
 
@@ -81,7 +115,7 @@ int send_next_packet(int sock, struct sockaddr_in out) {
   return 1;
 }
 
-void send_final_packet(int sock, struct sockaddr_in out) {
+void send_final_packet(int sequence, int sock, struct sockaddr_in out) {
   header *myheader = make_header(sequence+1, 0, 1, 0, 1);
   mylog("[send eof]\n");
 
@@ -136,8 +170,12 @@ int main(int argc, char *argv[]) {
   t.tv_sec = 30;
   t.tv_usec = 0;
 
-  while (send_next_packet(sock, out)) {
+  unsigned int sequence = 0;
+  readin(DATA_SIZE*2);
+
+  while (send_next_packet(sequence, sock, out)) {
     int done = 0;
+    readin(DATA_SIZE*2);
 
     while (! done) {
       FD_ZERO(&socks);
@@ -168,7 +206,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  send_final_packet(sock, out);
+  send_final_packet(sequence, sock, out);
 
   mylog("[completed]\n");
 

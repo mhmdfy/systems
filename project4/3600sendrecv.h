@@ -12,12 +12,12 @@
 #include <stdarg.h>
 
 typedef struct header_t {
-  unsigned int magic:14;
+  unsigned int magic:30;
+  unsigned int ack:1;
   unsigned int eof:1;
   unsigned short length;
   unsigned short window;
   unsigned int sequence;
-  unsigned int ack;
 } header;
 
 unsigned int MAGIC;
