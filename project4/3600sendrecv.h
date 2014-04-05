@@ -13,16 +13,17 @@
 
 typedef struct header_t {
   unsigned int magic:14;
-  unsigned int ack:1;
   unsigned int eof:1;
   unsigned short length;
+  unsigned short window;
   unsigned int sequence;
+  unsigned int ack;
 } header;
 
 unsigned int MAGIC;
 
 void dump_packet(unsigned char *data, int size);
-header *make_header(int sequence, int length, int eof, int ack);
+header *make_header(int sequence, int length, int eof, int ack, int window);
 header *get_header(void *data);
 char *get_data(void *data);
 char *timestamp();

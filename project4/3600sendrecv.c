@@ -23,7 +23,7 @@
 
 #include "3600sendrecv.h"
 
-unsigned int MAGIC = 0x0bee;
+unsigned int MAGIC = 1971083015;
 
 char ts[16];
 
@@ -58,13 +58,14 @@ void mylog(char *fmt, ...) {
  * returns a brand new header.  The caller is responsible for
  * eventually free-ing the header.
  */
-header *make_header(int sequence, int length, int eof, int ack) {
+header *make_header(int sequence, int length, int eof, int ack, int window) {
   header *myheader = (header *) malloc(sizeof(header));
   myheader->magic = MAGIC;
   myheader->eof = eof;
   myheader->sequence = htonl(sequence);
   myheader->length = htons(length);
-  myheader->ack = ack;
+  myheader->ack = htonl(ack);
+  myheader->window = htons(window);
 
   return myheader;
 }
@@ -77,6 +78,8 @@ header *get_header(void *data) {
   header *h = (header *) data;
   h->sequence = ntohl(h->sequence);
   h->length = ntohs(h->length);
+  h->ack = ntohl(h->ack);
+  h->window = ntohs(h->window);
 
   return h;
 }
