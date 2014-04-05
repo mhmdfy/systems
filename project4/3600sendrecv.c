@@ -23,7 +23,7 @@
 
 #include "3600sendrecv.h"
 
-unsigned int MAGIC = 1971083015;
+unsigned int MAGIC = 0x08a9;
 
 char ts[16];
 
