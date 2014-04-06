@@ -51,7 +51,7 @@ int readin(int size){
         eof = 0;
     }
   }
-  mylog("buf is : %s" buffer); 
+  mylog("buf is : %s", buffer); 
   return len;
 }
 
