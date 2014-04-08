@@ -64,7 +64,7 @@ header *make_header(int sequence, int length, int eof, int ack, int window) {
   myheader->eof = eof;
   myheader->sequence = htonl(sequence);
   myheader->length = htons(length);
-  myheader->ack = htonl(ack);
+  myheader->ack = ack;
   myheader->window = htons(window);
 
   return myheader;
@@ -78,7 +78,7 @@ header *get_header(void *data) {
   header *h = (header *) data;
   h->sequence = ntohl(h->sequence);
   h->length = ntohs(h->length);
-  h->ack = ntohl(h->ack);
+  h->ack = h->ack;
   h->window = ntohs(h->window);
 
   return h;

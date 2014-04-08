@@ -24,10 +24,10 @@
 
 static int DATA_SIZE = 1460;
 int BUFFER_SIZE = 146000;
-char buffer[146000];
-int sentacked = 0;
-int sent = 0;
-int eof = 0;
+char BUF[146000];
+int SENTACKED = 0;
+int SENT = 0;
+int FIN = 0;
 
 void usage() {
   printf("Usage: 3600send host:port\n");
@@ -37,21 +37,20 @@ void usage() {
 //reads from stdin and puts data into buffer
 int readin(int size){
   int len = 0;
-  if(eof < sentacked){
-    if(eof+size <= sentacked){
-      len = read(0, buffer+eof, size);
-      eof = eof + len;
+  if(FIN < SENTACKED){
+    if(FIN+size <= SENTACKED){
+      len = read(0, BUF+FIN, size);
+      FIN = FIN + len;
     }
   }
   else{
-    if(eof+size <= BUFFER_SIZE){
-      len = read(0, buffer+eof, size);
-      eof = eof + len;
-      if(eof == BUFFER_SIZE)
-        eof = 0;
+    if(FIN+size <= BUFFER_SIZE){
+      len = read(0, BUF+FIN, size);
+      FIN = FIN + len;
+      if(FIN == BUFFER_SIZE)
+        FIN = 0;
     }
   }
-  mylog("buf is : %s", buffer); 
   return len;
 }
 
@@ -59,17 +58,24 @@ int readin(int size){
  * Reads the next block of data from the buffer
  */
 int get_next_data(char *data, int size) {
-  if(eof > sent){
-    if(eof-sent < size)
-      size = eof-sent;
+  if(FIN > SENT){
+    if(FIN-SENT < size)
+      size = FIN-SENT;
   }
-  else{
-    if(BUFFER_SIZE-sent < size)
-      size = BUFFER_SIZE-sent;
+  else if (FIN < SENT){
+    if(BUFFER_SIZE-SENT < size)
+      size = BUFFER_SIZE-SENT;
   }
-  memcpy(data, buffer+sent, size);
-  sent = sent+size;
+  else {
+    return 0;
+  }
+  memcpy(data, BUF+SENT, size);
+  SENT = SENT+size;
   return size;
+}
+
+int get_next_data1(char *data, int size) {
+  return read(0, data, size);
 }
 
 /**
@@ -198,6 +204,11 @@ int main(int argc, char *argv[]) {
           sequence = myheader->sequence;
           done = 1;
         } else {
+          
+        if(myheader->magic != MAGIC) mylog("magic is wrong %d=/=%d\n", myheader->magic, MAGIC);
+        if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
+        if(myheader->ack != 1) mylog("this isn't an ack: %d\n", myheader->ack);
+
           mylog("[recv corrupted ack] %x %d\n", MAGIC, sequence);
         }
       } else {
