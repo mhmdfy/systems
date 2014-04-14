@@ -34,22 +34,52 @@ void usage() {
   exit(1);
 }
 
+int verify(int sequence) {
+  if(SENTACKED < SENT) {
+    int newSentAck = SENTACKED+sequence;
+    if(newSentAck > SENT)
+      return 0;
+    else{
+      SENTACKED = newSentAck;
+      return 1;
+    }
+  }
+  else if(SENTACKED > SENT) {
+    int newSentAck = SENTACKED+sequence;
+    if(newSentAck < BUFFER_SIZE) {
+      SENTACKED = newSentAck;
+      return 1;
+    }
+    else {
+      newSentAck = newSentAck % BUFFER_SIZE;
+      if(newSentAck > SENT)
+        return 0;
+      else {
+        SENTACKED = newSentAck;
+        return 1;
+      }
+    }
+  }
+  else
+    return 0;  
+}
+
 //reads from stdin and puts data into buffer
 int readin(int size){
   int len = 0;
   if(FIN < SENTACKED){
-    if(FIN+size <= SENTACKED){
-      len = read(0, BUF+FIN, size);
-      FIN = FIN + len;
-    }
+    if(FIN+size > SENTACKED)
+      size = SENTACKED-FIN;
+    len = read(0, BUF+FIN, size);
+    FIN = FIN + len;
   }
   else{
-    if(FIN+size <= BUFFER_SIZE){
-      len = read(0, BUF+FIN, size);
-      FIN = FIN + len;
-      if(FIN == BUFFER_SIZE)
-        FIN = 0;
-    }
+    if(FIN+size > BUFFER_SIZE)
+      size = BUFFER_SIZE-FIN;
+    len = read(0, BUF+FIN, size);
+    FIN = FIN + len;
+    if(FIN == BUFFER_SIZE)
+      FIN = 0;
   }
   return len;
 }
@@ -57,7 +87,10 @@ int readin(int size){
 /**
  * Reads the next block of data from the buffer
  */
-int get_next_data(char *data, int size) {
+int get_next_data(int sequence, char *data, int size) {
+  if(SENT != (sequence % BUFFER_SIZE))
+    SENT = sequence % BUFFER_SIZE;
+
   if(FIN > SENT){
     if(FIN-SENT < size)
       size = FIN-SENT;
@@ -74,17 +107,13 @@ int get_next_data(char *data, int size) {
   return size;
 }
 
-int get_next_data1(char *data, int size) {
-  return read(0, data, size);
-}
-
 /**
  * Builds and returns the next packet, or NULL
  * if no more data is available.
  */
 void *get_next_packet(int sequence, int *len) {
   char *data = malloc(DATA_SIZE);
-  int data_len = get_next_data(data, DATA_SIZE);
+  int data_len = get_next_data(sequence, data, DATA_SIZE);
 
   if (data_len == 0) {
     free(data);
@@ -118,11 +147,11 @@ int send_next_packet(int sequence, int sock, struct sockaddr_in out) {
     exit(1);
   }
 
-  return 1;
+  return packet_len - sizeof(header);
 }
 
 void send_final_packet(int sequence, int sock, struct sockaddr_in out) {
-  header *myheader = make_header(sequence+1, 0, 1, 0, 1);
+  header *myheader = make_header(sequence, 0, 1, 0, 1);
   mylog("[send eof]\n");
 
   if (sendto(sock, myheader, sizeof(header), 0, (struct sockaddr *) &out, (socklen_t) sizeof(out)) < 0) {
@@ -177,11 +206,28 @@ int main(int argc, char *argv[]) {
   t.tv_usec = 0;
 
   unsigned int sequence = 0;
-  readin(DATA_SIZE*2);
+  //readin(DATA_SIZE*2);
 
-  while (send_next_packet(sequence, sock, out)) {
+  int window = 10;
+
+  while(1) {
+    readin(BUFFER_SIZE/2);
+
+    int i;
+    int isSent = 0;
+
+    for(i = 0; i < window; i++) {
+      int packet_len = send_next_packet(sequence, sock, out);
+      if(packet_len > 0) {
+        isSent = 1;
+        sequence = sequence + packet_len;
+      }
+    }
+
+    if(!isSent)
+	     break;
+
     int done = 0;
-    readin(DATA_SIZE*2);
 
     while (! done) {
       FD_ZERO(&socks);
@@ -199,13 +245,15 @@ int main(int argc, char *argv[]) {
 
         header *myheader = get_header(buf);
 
-        if ((myheader->magic == MAGIC) && (myheader->sequence >= sequence) && (myheader->ack == 1)) {
+        if ((myheader->magic == MAGIC) &&  (myheader->ack == 1)) { // Took out (myheader->sequence >= sequence)
           mylog("[recv ack] %d\n", myheader->sequence);
           sequence = myheader->sequence;
+          window = myheader->window;
+          verify(sequence);
           done = 1;
         } else {
           
-        if(myheader->magic != MAGIC) mylog("magic is wrong %d=/=%d\n", myheader->magic, MAGIC);
+        //if(myheader->magic != MAGIC) mylog("magic is wrong %d=/=%d\n", myheader->magic, MAGIC);
         if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
         if(myheader->ack != 1) mylog("this isn't an ack: %d\n", myheader->ack);
 

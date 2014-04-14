@@ -22,6 +22,24 @@
 
 #include "3600sendrecv.h"
 
+int BUFFER_SIZE = 146000;
+char BUF[146000];
+int RECV = 0;
+
+void writeToBuf(char* data, int size) {
+  if(RECV + size >= BUFFER_SIZE) {
+    int newSize = BUFFER_SIZE-RECV;
+    memcpy(BUF+RECV, data, newSize);
+    RECV = 0;
+    write(1, BUF, BUFFER_SIZE);
+    writeToBuf(data+newSize, size-newSize);
+  }
+  else {
+    memcpy(BUF+RECV, data, size);
+    RECV = RECV + size; 
+  }
+}
+
 int main() {
   /**
    * I've included some basic code for opening a UDP socket in C, 
@@ -74,6 +92,8 @@ int main() {
   int buf_len = 1500;
   void* buf = malloc(buf_len);
 
+  unsigned int prev_sequence = 0;
+  header *responseheader;
   // wait to receive, or for a timeout
   while (1) {
     FD_ZERO(&socks);
@@ -92,12 +112,20 @@ int main() {
       char *data = get_data(buf);
   
       if (myheader->magic == MAGIC) {
-        write(1, data, myheader->length);
+        if(myheader->sequence == prev_sequence) {
+          writeToBuf(data, myheader->length);
 
-        mylog("[recv data] %d (%d) %s\n", myheader->sequence, myheader->length, "ACCEPTED (in-order)");
-        mylog("[send ack] %d\n", myheader->sequence + myheader->length);
+          mylog("[recv data] %d (%d) %s\n", myheader->sequence, myheader->length, "ACCEPTED (in-order)");
+          mylog("[send ack] %d\n", myheader->sequence + myheader->length);
 
-        header *responseheader = make_header(myheader->sequence + myheader->length, 0, myheader->eof, 1, 1);
+          responseheader = make_header(myheader->sequence + myheader->length, 0, myheader->eof, 1, 10);
+          prev_sequence = myheader->sequence + myheader->length;
+        }
+        else {
+          responseheader = make_header(prev_sequence, 0, myheader->eof, 1, 10);
+          mylog("Received packet out of order: %d vs %d\n", prev_sequence, myheader->sequence); 
+          mylog("Sending ack for %d\n", prev_sequence);
+        }
 
         if (sendto(sock, responseheader, sizeof(header), 0, (struct sockaddr *) &in, (socklen_t) sizeof(in)) < 0) {
           perror("sendto");
@@ -107,6 +135,7 @@ int main() {
         if (myheader->eof) {
           mylog("[recv eof]\n");
           mylog("[completed]\n");
+          write(1, BUF, RECV);
           exit(0);
         }
       } else {
@@ -114,10 +143,12 @@ int main() {
       }
     } else {
       mylog("[error] timeout occurred\n");
+      write(1, BUF, RECV);
       exit(1);
     }
   }
-
+  mylog("finished loop, writing to stdout\n");
+  write(1, BUF, RECV);
 
   return 0;
 }
