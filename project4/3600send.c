@@ -222,6 +222,10 @@ int main(int argc, char *argv[]) {
         isSent = 1;
         sequence = sequence + packet_len;
       }
+      else{
+        send_final_packet(sequence, sock, out);
+        break;
+      }
     }
 
     if(!isSent)
@@ -253,9 +257,9 @@ int main(int argc, char *argv[]) {
           done = 1;
         } else {
           
-        //if(myheader->magic != MAGIC) mylog("magic is wrong %d=/=%d\n", myheader->magic, MAGIC);
-        if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
-        if(myheader->ack != 1) mylog("this isn't an ack: %d\n", myheader->ack);
+          //if(myheader->magic != MAGIC) mylog("magic is wrong %d=/=%d\n", myheader->magic, MAGIC);
+          if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
+          if(myheader->ack != 1) mylog("this isn't an ack: %d\n", myheader->ack);
 
           mylog("[recv corrupted ack] %x %d\n", MAGIC, sequence);
         }
@@ -265,7 +269,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  send_final_packet(sequence, sock, out);
+ // send_final_packet(sequence, sock, out);
 
   mylog("[completed]\n");
 
