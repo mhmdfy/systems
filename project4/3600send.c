@@ -223,7 +223,7 @@ int main(int argc, char *argv[]) {
         sequence = sequence + packet_len;
       }
       else{
-        send_final_packet(sequence, sock, out);
+        //send_final_packet(sequence, sock, out);
         break;
       }
     }
@@ -269,7 +269,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
- // send_final_packet(sequence, sock, out);
+ send_final_packet(sequence, sock, out);
 
   mylog("[completed]\n");
 

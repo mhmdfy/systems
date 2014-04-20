@@ -118,9 +118,8 @@ int main() {
         if (myheader->magic == MAGIC) {
           if(myheader->sequence == prev_sequence) {
             writeToBuf(data, myheader->length);
-            mylog("writing to buffer %s\n", data);
+            mylog("writing to buffer (%d)\n", myheader->length);
             mylog("[recv data] %d (%d) %s\n", myheader->sequence, myheader->length, "ACCEPTED (in-order)");
-            mylog("[send ack] %d\n", myheader->sequence + myheader->length);
 
             prev_sequence = myheader->sequence + myheader->length;
             if(myheader->eof || strlen(data) == 0){
@@ -130,7 +129,6 @@ int main() {
           } 
           else {
             mylog("Received packet out of order: %d vs %d\n", prev_sequence, myheader->sequence); 
-            mylog("Sending ack for %d\n", prev_sequence);
             break;
           }
         } 
@@ -144,6 +142,7 @@ int main() {
         exit(1);
       }
     }
+    mylog("[send ack] %d\n", prev_sequence);
     responseheader = make_header(prev_sequence, 0, myheader->eof, 1, BUFFER_SIZE-RECV);
     if (sendto(sock, responseheader, sizeof(header), 0, (struct sockaddr *) &in, (socklen_t) sizeof(in)) < 0) {
       perror("sendto");
