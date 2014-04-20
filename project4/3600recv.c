@@ -94,54 +94,47 @@ int main() {
 
   unsigned int prev_sequence = 0;
   header *responseheader;
-  // wait to receive, or for a timeout
+
   while (1) {
-    int i;
     header *myheader;
     char *data;
-    for (i = 0; i < 10; i++){
-      FD_ZERO(&socks);
-      FD_SET(sock, &socks);
-      mylog("in for loop %d\n", i);
-      if (select(sock + 1, &socks, NULL, NULL, &t)) {
-        int received = recvfrom(sock, buf, buf_len, 0, (struct sockaddr *) &in, (socklen_t *) &in_len);
-        if (received  < 0) {
-          perror("recvfrom");
-          exit(1);
-        }
+    FD_ZERO(&socks);
+    FD_SET(sock, &socks);
 
-//      dump_packet(buf, received);
-
-        myheader = get_header(buf);
-        data = get_data(buf);
-     
-        if (myheader->magic == MAGIC) {
-          if(myheader->sequence == prev_sequence) {
-            writeToBuf(data, myheader->length);
-            mylog("writing to buffer (%d)\n", myheader->length);
-            mylog("[recv data] %d (%d) %s\n", myheader->sequence, myheader->length, "ACCEPTED (in-order)");
-
-            prev_sequence = myheader->sequence + myheader->length;
-            if(myheader->eof || strlen(data) == 0){
-              mylog("eof breaking\n");
-              break;
-            }
-          } 
-          else {
-            mylog("Received packet out of order: %d vs %d\n", prev_sequence, myheader->sequence); 
-            break;
-          }
-        } 
-        else{
-          mylog("[recv corrupted packet]\n");
-        }
-      } 
-      else {
-        mylog("[error] timeout occurred\n");
-        write(1, BUF, RECV);
+    // wait to receive, or for a timeout
+    if (select(sock + 1, &socks, NULL, NULL, &t)) {
+      int received = recvfrom(sock, buf, buf_len, 0, (struct sockaddr *) &in, (socklen_t *) &in_len);
+      if (received  < 0) {
+        perror("recvfrom");
         exit(1);
       }
+
+      //dump_packet(buf, received);
+
+      myheader = get_header(buf);
+      data = get_data(buf);
+     
+      if (myheader->magic == MAGIC) {
+        if(myheader->sequence == prev_sequence) {
+          writeToBuf(data, myheader->length);
+          mylog("[recv data] %d (%d) %s\n", myheader->sequence, myheader->length, "ACCEPTED (in-order)");
+
+          prev_sequence = myheader->sequence + myheader->length;
+        } 
+        else {
+          mylog("Received packet out of order: %d vs %d\n", prev_sequence, myheader->sequence); 
+        }
+      } 
+      else{
+        mylog("[recv corrupted packet]\n");
+      }
+    } 
+    else {
+      mylog("[error] timeout occurred\n");
+      write(1, BUF, RECV);
+      exit(1);
     }
+
     mylog("[send ack] %d\n", prev_sequence);
     responseheader = make_header(prev_sequence, 0, myheader->eof, 1, BUFFER_SIZE-RECV);
     if (sendto(sock, responseheader, sizeof(header), 0, (struct sockaddr *) &in, (socklen_t) sizeof(in)) < 0) {

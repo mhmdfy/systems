@@ -205,37 +205,46 @@ int main(int argc, char *argv[]) {
   t.tv_sec = 30;
   t.tv_usec = 0;
 
+  struct timeval small_t;
+  small_t.tv_sec = 2;
+  small_t.tv_usec = 0;
+
   unsigned int sequence = 0;
   //readin(DATA_SIZE*2);
 
-  int window = 10;
+  int window = 1;
+  int slow_start = 100;
 
   while(1) {
     readin(BUFFER_SIZE/2);
 
     int i;
+    int j;
     int isSent = 0;
+    int temp_seq = sequence;
 
     for(i = 0; i < window; i++) {
-      int packet_len = send_next_packet(sequence, sock, out);
+      int packet_len = send_next_packet(temp_seq, sock, out);
       if(packet_len > 0) {
         isSent = 1;
-        sequence = sequence + packet_len;
+        temp_seq = temp_seq + packet_len;
       }
       else{
-        //send_final_packet(sequence, sock, out);
         break;
       }
     }
 
     if(!isSent)
-	     break;
+      break;
 
-    int done = 0;
+   // int done = 0;
 
-    while (! done) {
+    //while (! done) {
+    for(j = 0; j < i; j++) {
       FD_ZERO(&socks);
       FD_SET(sock, &socks);
+
+      mylog("inside for loop %d\n", j);
 
       // wait to receive, or for a timeout
       if (select(sock + 1, &socks, NULL, NULL, &t)) {
@@ -249,14 +258,18 @@ int main(int argc, char *argv[]) {
 
         header *myheader = get_header(buf);
 
-        if ((myheader->magic == MAGIC) &&  (myheader->ack == 1)) { // Took out (myheader->sequence >= sequence)
+        if ((myheader->magic == MAGIC) && (myheader->ack == 1)) { // Took out (myheader->sequence >= sequence)
           mylog("[recv ack] %d\n", myheader->sequence);
           sequence = myheader->sequence;
-          window = myheader->window;
+          //window = myheader->window;
           verify(sequence);
-          done = 1;
+          if(window < slow_start)
+            window = window*2;
+          else
+            window = window + 1;
+         // done = 1;
         } else {
-          
+        
           //if(myheader->magic != MAGIC) mylog("magic is wrong %d=/=%d\n", myheader->magic, MAGIC);
           if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
           if(myheader->ack != 1) mylog("this isn't an ack: %d\n", myheader->ack);
@@ -264,13 +277,15 @@ int main(int argc, char *argv[]) {
           mylog("[recv corrupted ack] %x %d\n", MAGIC, sequence);
         }
       } else {
-        mylog("[error] timeout occurred\n");
+        mylog("[error] timeout occurred\n"); 
+        slow_start = window/2;
+        window = 1;
+        break;
       }
     }
   }
 
- send_final_packet(sequence, sock, out);
-
+  send_final_packet(sequence, sock, out);
   mylog("[completed]\n");
 
   return 0;
