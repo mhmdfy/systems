@@ -260,13 +260,18 @@ int main(int argc, char *argv[]) {
 
         if ((myheader->magic == MAGIC) && (myheader->ack == 1)) { // Took out (myheader->sequence >= sequence)
           mylog("[recv ack] %d\n", myheader->sequence);
-          sequence = myheader->sequence;
-          //window = myheader->window;
+          if(myheader->sequence > sequence)
+            sequence = myheader->sequence;
           verify(sequence);
+          // Sliding window (Tahoe)
           if(window < slow_start)
             window = window*2;
           else
             window = window + 1;
+
+          // receiver's buffer
+          if(window > myheader->window)
+            window = myheader->window;
          // done = 1;
         } else {
         
@@ -278,8 +283,8 @@ int main(int argc, char *argv[]) {
         }
       } else {
         mylog("[error] timeout occurred\n"); 
-        slow_start = window/2;
-        window = 1;
+        window = window/2;
+        slow_start = window;
         break;
       }
     }

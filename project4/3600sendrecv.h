@@ -20,6 +20,11 @@ typedef struct header_t {
   unsigned int sequence;
 } header;
 
+typedef struct ooo_t {
+  unsigned int sequence;
+  unsigned int length;
+} ooo;
+
 unsigned int MAGIC;
 
 void dump_packet(unsigned char *data, int size);

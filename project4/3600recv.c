@@ -25,19 +25,65 @@
 int BUFFER_SIZE = 146000;
 char BUF[146000];
 int RECV = 0;
+header OOO[100 * sizeof(header)];
+int COUNT = 0;
 
-void writeToBuf(char* data, int size) {
+void reorderArray(int min) {
+  int i;
+  COUNT--;
+  for(i = min; i < COUNT; i++) {
+    OOO[i] = OOO[i+1];
+  }
+}
+
+int isAlreadyReceived(unsigned int sequence) {
+  int i;
+  for(i = 0; i < COUNT; i++) {
+    if(sequence == OOO[i].sequence) {
+      reorderArray(i);
+      int size = OOO[i].length;
+      mylog("already received %d\n", sequence);
+      return size;
+     }
+   }
+   return 0; 
+}
+
+int writeToBuf(char* data, int size, unsigned int sequence) {
+
   if(RECV + size >= BUFFER_SIZE) {
     int newSize = BUFFER_SIZE-RECV;
     memcpy(BUF+RECV, data, newSize);
     RECV = 0;
     write(1, BUF, BUFFER_SIZE);
-    writeToBuf(data+newSize, size-newSize);
+    writeToBuf(data+newSize, size-newSize, sequence);
   }
   else {
     memcpy(BUF+RECV, data, size);
-    RECV = RECV + size; 
+    RECV = RECV + size;
+    sequence = sequence + size;
+    while(1) {
+      mylog("did we receive %d before?\n", sequence);
+      size = isAlreadyReceived(sequence);
+      if(size == 0)
+        break;
+      RECV = RECV + size;
+      sequence = sequence + size;
+    }
   }
+  return sequence; 
+}
+
+void writeOutOfOrder(char* data, int size, int sequence) {  
+  mylog("writing %d to buffer out of order\n", sequence);
+  memcpy(BUF+(sequence%146000), data, size);
+  mylog("done memcpy\n");
+  OOO[COUNT].sequence = sequence;
+  mylog("added sequence\n");
+  OOO[COUNT].length = size;
+  mylog("added length\n");
+  COUNT++;
+  mylog("done writing %d\n", sequence);
 }
 
 int main() {
@@ -116,13 +162,15 @@ int main() {
      
       if (myheader->magic == MAGIC) {
         if(myheader->sequence == prev_sequence) {
-          writeToBuf(data, myheader->length);
+          prev_sequence = writeToBuf(data, myheader->length, myheader->sequence);
           mylog("[recv data] %d (%d) %s\n", myheader->sequence, myheader->length, "ACCEPTED (in-order)");
 
-          prev_sequence = myheader->sequence + myheader->length;
+          //prev_sequence = myheader->sequence + myheader->length;
         } 
         else {
           mylog("Received packet out of order: %d vs %d\n", prev_sequence, myheader->sequence); 
+          if(myheader->sequence > prev_sequence)
+            writeOutOfOrder(data, myheader->length, myheader->sequence);
         }
       } 
       else{
