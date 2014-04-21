@@ -63,7 +63,6 @@ int writeToBuf(char* data, int size, unsigned int sequence) {
     RECV = RECV + size;
     sequence = sequence + size;
     while(1) {
-      mylog("did we receive %d before?\n", sequence);
       size = isAlreadyReceived(sequence);
       if(size == 0)
         break;
@@ -75,15 +74,10 @@ int writeToBuf(char* data, int size, unsigned int sequence) {
 }
 
 void writeOutOfOrder(char* data, int size, int sequence) {  
-  mylog("writing %d to buffer out of order\n", sequence);
   memcpy(BUF+(sequence%146000), data, size);
-  mylog("done memcpy\n");
   OOO[COUNT].sequence = sequence;
-  mylog("added sequence\n");
   OOO[COUNT].length = size;
-  mylog("added length\n");
   COUNT++;
-  mylog("done writing %d\n", sequence);
 }
 
 int main() {
@@ -131,7 +125,7 @@ int main() {
 
   // construct the timeout
   struct timeval t;
-  t.tv_sec = 30;
+  t.tv_sec = 25;
   t.tv_usec = 0;
 
   // our receive buffer

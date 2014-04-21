@@ -202,12 +202,12 @@ int main(int argc, char *argv[]) {
 
   // construct the timeout
   struct timeval t;
-  t.tv_sec = 30;
+  t.tv_sec = 25;
   t.tv_usec = 0;
 
-  struct timeval small_t;
-  small_t.tv_sec = 2;
-  small_t.tv_usec = 0;
+  struct timeval ack_t;
+  ack_t.tv_sec = 2;
+  ack_t.tv_usec = 0;
 
   unsigned int sequence = 0;
   //readin(DATA_SIZE*2);
@@ -236,8 +236,10 @@ int main(int argc, char *argv[]) {
 
     if(!isSent)
       break;
-
+    FD_ZERO(&socks);
+    FD_SET(sock, &socks);
    // int done = 0;
+    if (select(sock +1, &socks, NULL, NULL, &t)){
 
     //while (! done) {
     for(j = 0; j < i; j++) {
@@ -247,7 +249,7 @@ int main(int argc, char *argv[]) {
       mylog("inside for loop %d\n", j);
 
       // wait to receive, or for a timeout
-      if (select(sock + 1, &socks, NULL, NULL, &t)) {
+      if (select(sock + 1, &socks, NULL, NULL, &ack_t)) {
         unsigned char buf[10000];
         int buf_len = sizeof(buf);
         int received;
@@ -282,11 +284,15 @@ int main(int argc, char *argv[]) {
           mylog("[recv corrupted ack] %x %d\n", MAGIC, sequence);
         }
       } else {
-        mylog("[error] timeout occurred\n"); 
+        mylog("[error] dropped packet %d\n", j); 
         window = window/2;
         slow_start = window;
         break;
       }
+    }
+    }
+    else{
+      mylog("[error] timeout occurred\n");
     }
   }
 
