@@ -210,7 +210,6 @@ int main(int argc, char *argv[]) {
   ack_t.tv_usec = 0;
 
   unsigned int sequence = 0;
-  //readin(DATA_SIZE*2);
 
   int window = 1;
   int slow_start = 100;
@@ -218,38 +217,31 @@ int main(int argc, char *argv[]) {
   while(1) {
     readin(BUFFER_SIZE/2);
 
-    int i;
-    int j;
-    int isSent = 0;
-    int temp_seq = sequence;
+    int count = 1;
+    int done = 0;
+    unsigned int last_seq = -1;
 
-    for(i = 0; i < window; i++) {
-      int packet_len = send_next_packet(temp_seq, sock, out);
+    if(count < window) {
+      int packet_len = send_next_packet(sequence, sock, out);
       if(packet_len > 0) {
-        isSent = 1;
-        temp_seq = temp_seq + packet_len;
+        sequence = sequence + packet_len;
+        done = 0;
+        count++;
       }
-      else{
-        break;
+      else {
+        mylog("sent all data\n");
+        done = 1;
+        last_seq = sequence;
       }
     }
 
-    if(!isSent)
-      break;
-    FD_ZERO(&socks);
-    FD_SET(sock, &socks);
-   // int done = 0;
-    if (select(sock +1, &socks, NULL, NULL, &t)){
-
-    //while (! done) {
-    for(j = 0; j < i; j++) {
+    if (count >= window || done) {
       FD_ZERO(&socks);
       FD_SET(sock, &socks);
 
-      mylog("inside for loop %d\n", j);
-
       // wait to receive, or for a timeout
-      if (select(sock + 1, &socks, NULL, NULL, &ack_t)) {
+      if (select(sock + 1, &socks, NULL, NULL, &t)){
+
         unsigned char buf[10000];
         int buf_len = sizeof(buf);
         int received;
@@ -262,9 +254,14 @@ int main(int argc, char *argv[]) {
 
         if ((myheader->magic == MAGIC) && (myheader->ack == 1)) { // Took out (myheader->sequence >= sequence)
           mylog("[recv ack] %d\n", myheader->sequence);
+
           if(myheader->sequence > sequence)
             sequence = myheader->sequence;
           verify(sequence);
+
+          if(myheader->sequence == last_seq)
+            break;
+          
           // Sliding window (Tahoe)
           if(window < slow_start)
             window = window*2;
@@ -274,25 +271,22 @@ int main(int argc, char *argv[]) {
           // receiver's buffer
           if(window > myheader->window)
             window = myheader->window;
-         // done = 1;
-        } else {
-        
-          //if(myheader->magic != MAGIC) mylog("magic is wrong %d=/=%d\n", myheader->magic, MAGIC);
-          if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
+     
+          count--;
+        } 
+        else {
+          //if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
+          if(myheader->magic != MAGIC) mylog("magic is wrong %d=/=%d\n", myheader->magic, MAGIC);
           if(myheader->ack != 1) mylog("this isn't an ack: %d\n", myheader->ack);
 
           mylog("[recv corrupted ack] %x %d\n", MAGIC, sequence);
         }
-      } else {
-        mylog("[error] dropped packet %d\n", j); 
+      } 
+      else {
+        mylog("[error] dropped packet %d\n", count); 
         window = window/2;
         slow_start = window;
-        break;
       }
-    }
-    }
-    else{
-      mylog("[error] timeout occurred\n");
     }
   }
 
