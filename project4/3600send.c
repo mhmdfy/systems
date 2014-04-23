@@ -29,6 +29,7 @@ int SENTACKED = 0;
 int SENT = 0;
 int FIN = 0;
 
+
 void usage() {
   printf("Usage: 3600send host:port\n");
   exit(1);
@@ -214,25 +215,27 @@ int main(int argc, char *argv[]) {
   int window = 1;
   int slow_start = 100;
   int done = 0;
-  int count = 0;
+  int unacked = 0;
+  unsigned int last_ack = 0;
 
   while(1) {
     readin(BUFFER_SIZE/2);
 
-    if(count < window) {
+    if(unacked < window) {
       int packet_len = send_next_packet(sequence, sock, out);
       if(packet_len > 0) {
         sequence = sequence + packet_len;
         done = 0;
-        count++;
       }
       else {
-        send_final_packet(sequence, sock, out);
+        if(!done)
+          send_final_packet(sequence, sock, out);
         done = 1;
       }
+      unacked++;
     }
 
-    if (count >= window || done) {
+    if (unacked >= window || done) {
       FD_ZERO(&socks);
       FD_SET(sock, &socks);
 
@@ -252,16 +255,17 @@ int main(int argc, char *argv[]) {
         if ((myheader->magic == MAGIC) && (myheader->ack == 1)) { // Took out (myheader->sequence >= sequence)
           mylog("[recv ack] %d\n", myheader->sequence);
 
-          sequence = myheader->sequence;
-          verify(sequence);
+          if (last_ack < myheader->sequence) {
+            last_ack = myheader->sequence;
+            verify(last_ack);
+            unacked--;
+          }
 
           if(myheader->eof) {
             mylog("[recv eof ack]\n");
             break;
           }
           
-          count--;
-          //if(count == 0){ 
           // Sliding window (Tahoe)
           if(window < slow_start)
             window = window*2;
@@ -271,7 +275,6 @@ int main(int argc, char *argv[]) {
           // receiver's buffer
           if(window > myheader->window)
             window = myheader->window;
-          //}
         } 
         else {
           //if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
@@ -282,11 +285,13 @@ int main(int argc, char *argv[]) {
         }
       } 
       else {
-        mylog("[error] dropped packet %d\n", count); 
+        mylog("[error] dropped packet %d vs %d\n", unacked, window);
+        unacked--;
         window = window/2;
         if(window < 1)
           window = 1;
         slow_start = window;
+        sequence = last_ack;
       }
     }
   }
