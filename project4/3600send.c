@@ -213,13 +213,14 @@ int main(int argc, char *argv[]) {
 
   int window = 1;
   int slow_start = 100;
+  unsigned int last_seq = -1;
+  unsigned int last_ack = -2;
+  int done = 0;
 
   while(1) {
     readin(BUFFER_SIZE/2);
 
-    int count = 1;
-    int done = 0;
-    unsigned int last_seq = -1;
+    int count = 0;
 
     if(count < window) {
       int packet_len = send_next_packet(sequence, sock, out);
@@ -229,11 +230,14 @@ int main(int argc, char *argv[]) {
         count++;
       }
       else {
-        mylog("sent all data\n");
         done = 1;
         last_seq = sequence;
+        mylog("sent all data %d vs %d\n", last_seq, last_ack);
       }
     }
+
+    if(last_seq == last_ack)
+      break;
 
     if (count >= window || done) {
       FD_ZERO(&socks);
@@ -259,8 +263,8 @@ int main(int argc, char *argv[]) {
             sequence = myheader->sequence;
           verify(sequence);
 
-          if(myheader->sequence == last_seq)
-            break;
+          mylog("adding to last_ack %d\n", myheader->sequence);
+          last_ack = myheader->sequence;
           
           // Sliding window (Tahoe)
           if(window < slow_start)
