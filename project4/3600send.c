@@ -206,21 +206,18 @@ int main(int argc, char *argv[]) {
   t.tv_usec = 0;
 
   struct timeval ack_t;
-  ack_t.tv_sec = 2;
+  ack_t.tv_sec = 1;
   ack_t.tv_usec = 0;
 
   unsigned int sequence = 0;
 
   int window = 1;
   int slow_start = 100;
-  unsigned int last_seq = -1;
-  unsigned int last_ack = -2;
   int done = 0;
+  int count = 0;
 
   while(1) {
     readin(BUFFER_SIZE/2);
-
-    int count = 0;
 
     if(count < window) {
       int packet_len = send_next_packet(sequence, sock, out);
@@ -230,21 +227,17 @@ int main(int argc, char *argv[]) {
         count++;
       }
       else {
+        send_final_packet(sequence, sock, out);
         done = 1;
-        last_seq = sequence;
-        mylog("sent all data %d vs %d\n", last_seq, last_ack);
       }
     }
-
-    if(last_seq == last_ack)
-      break;
 
     if (count >= window || done) {
       FD_ZERO(&socks);
       FD_SET(sock, &socks);
 
       // wait to receive, or for a timeout
-      if (select(sock + 1, &socks, NULL, NULL, &t)){
+      if (select(sock + 1, &socks, NULL, NULL, &ack_t)){
 
         unsigned char buf[10000];
         int buf_len = sizeof(buf);
@@ -259,13 +252,16 @@ int main(int argc, char *argv[]) {
         if ((myheader->magic == MAGIC) && (myheader->ack == 1)) { // Took out (myheader->sequence >= sequence)
           mylog("[recv ack] %d\n", myheader->sequence);
 
-          if(myheader->sequence > sequence)
-            sequence = myheader->sequence;
+          sequence = myheader->sequence;
           verify(sequence);
 
-          mylog("adding to last_ack %d\n", myheader->sequence);
-          last_ack = myheader->sequence;
+          if(myheader->eof) {
+            mylog("[recv eof ack]\n");
+            break;
+          }
           
+          count--;
+          //if(count == 0){ 
           // Sliding window (Tahoe)
           if(window < slow_start)
             window = window*2;
@@ -275,8 +271,7 @@ int main(int argc, char *argv[]) {
           // receiver's buffer
           if(window > myheader->window)
             window = myheader->window;
-     
-          count--;
+          //}
         } 
         else {
           //if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
@@ -289,12 +284,14 @@ int main(int argc, char *argv[]) {
       else {
         mylog("[error] dropped packet %d\n", count); 
         window = window/2;
+        if(window < 1)
+          window = 1;
         slow_start = window;
       }
     }
   }
 
-  send_final_packet(sequence, sock, out);
+  //send_final_packet(sequence, sock, out);
   mylog("[completed]\n");
 
   return 0;

@@ -138,6 +138,8 @@ int main() {
   while (1) {
     header *myheader;
     char *data;
+    int isOrdered = 1;
+    int eof = 0;
     FD_ZERO(&socks);
     FD_SET(sock, &socks);
 
@@ -158,11 +160,13 @@ int main() {
         if(myheader->sequence == prev_sequence) {
           prev_sequence = writeToBuf(data, myheader->length, myheader->sequence);
           mylog("[recv data] %d (%d) %s\n", myheader->sequence, myheader->length, "ACCEPTED (in-order)");
+          isOrdered = 1;
 
           //prev_sequence = myheader->sequence + myheader->length;
         } 
         else {
           mylog("Received packet out of order: %d vs %d\n", prev_sequence, myheader->sequence); 
+          isOrdered = 0;
           if(myheader->sequence > prev_sequence)
             writeOutOfOrder(data, myheader->length, myheader->sequence);
         }
@@ -177,15 +181,18 @@ int main() {
       exit(1);
     }
 
+    if(myheader->eof && isOrdered) {
+      mylog("[recv eof]\n");
+      eof = 1;
+    }
     mylog("[send ack] %d\n", prev_sequence);
-    responseheader = make_header(prev_sequence, 0, myheader->eof, 1, BUFFER_SIZE-RECV);
+    responseheader = make_header(prev_sequence, 0, eof, 1, BUFFER_SIZE-RECV);
     if (sendto(sock, responseheader, sizeof(header), 0, (struct sockaddr *) &in, (socklen_t) sizeof(in)) < 0) {
       perror("sendto");
       exit(1);
     }
 
-    if (myheader->eof) { 
-      mylog("[recv eof]\n");
+    if (eof) { 
       mylog("[completed]\n");
       write(1, BUF, RECV);
       exit(0);
