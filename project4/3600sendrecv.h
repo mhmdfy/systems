@@ -20,10 +20,11 @@ typedef struct header_t {
   unsigned int sequence;
 } header;
 
-typedef struct ooo_t {
+typedef struct window_t {
+  unsigned int used:1;
   unsigned int sequence;
-  unsigned int length;
-} ooo;
+  struct timeval t;
+} window;
 
 unsigned int MAGIC;
 

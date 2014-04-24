@@ -29,9 +29,79 @@ int SENTACKED = 0;
 int SENT = 0;
 int FIN = 0;
 
+window WIN[10];
+int WIN_SIZE = 10;
+
 void usage() {
   printf("Usage: 3600send host:port\n");
   exit(1);
+}
+
+struct timeval getLowestTimeval() {
+  int i;
+  int min_i = 0;
+  unsigned long min = 0;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(WIN[i].used) {
+      unsigned long val = 1000000 * WIN[i].t.tv_sec + WIN[i].t.tv_usec;
+      if(val < min || min == 0) {
+        min = val;
+        min_i = i;
+      }
+    }
+  }
+
+  return WIN[min_i].t;
+}
+
+
+struct timeval getTimer(struct timeval t) {
+  struct timeval lowest = getLowestTimeval();
+  struct timeval current;
+  gettimeofday(&current, NULL);
+  
+  unsigned long microLowest = 1000000 * lowest.tv_sec + lowest.tv_usec;
+  unsigned long microCurrent = 1000000 * current.tv_sec + current.tv_usec;
+  unsigned long microT = 1000000 * t.tv_sec + t.tv_usec;
+
+  unsigned long microNew = microT - (microCurrent - microLowest);
+
+  struct timeval new;
+  new.tv_sec = microNew / 1000000;
+  new.tv_usec = microNew % 1000000;
+
+  return new;
+}
+
+int canSend() {
+  int i;
+  int count = 0;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(!WIN[i].used)
+      count++;
+  }
+  return count;
+}
+
+void removeAcked(unsigned int sequence) {
+  int i;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(WIN[i].used && WIN[i].sequence < sequence)
+      WIN[i].used = 0;
+  }
+}
+
+int addToWin(unsigned int sequence) {
+  int i;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(WIN[i].used == 0) {
+      WIN[i].used = 1;
+      WIN[i].sequence = sequence;
+      gettimeofday(&WIN[i].t,NULL);
+      return 1;
+    }
+  }
+  return 0;
 }
 
 int verify(int sequence) {
@@ -202,7 +272,7 @@ int main(int argc, char *argv[]) {
 
   // construct the timeout
   struct timeval t;
-  t.tv_sec = 25;
+  t.tv_sec = 1;
   t.tv_usec = 0;
 
   struct timeval ack_t;
@@ -210,90 +280,77 @@ int main(int argc, char *argv[]) {
   ack_t.tv_usec = 0;
 
   unsigned int sequence = 0;
-  //readin(DATA_SIZE*2);
+  int i;
+  
+  readin(BUFFER_SIZE/2);
 
-  int window = 1;
-  int slow_start = 100;
+  // initialize buffer
+  for(i = 0; i < WIN_SIZE; i++)
+    WIN[i].used = 0;
+
+  // send first wave.
+  int toSend = canSend();
+  for(i = 0; i < toSend; i++) {
+    int packet_len = send_next_packet(sequence, sock, out);
+    if(packet_len > 0) {
+      addToWin(sequence);
+      sequence = sequence + packet_len;
+    }
+    else{
+      break;
+    }
+  }
 
   while(1) {
     readin(BUFFER_SIZE/2);
+    ack_t = getTimer(t);
 
-    int i;
-    int j;
-    int isSent = 0;
-    int temp_seq = sequence;
-
-    for(i = 0; i < window; i++) {
-      int packet_len = send_next_packet(temp_seq, sock, out);
-      if(packet_len > 0) {
-        isSent = 1;
-        temp_seq = temp_seq + packet_len;
-      }
-      else{
-        break;
-      }
-    }
-
-    if(!isSent)
-      break;
     FD_ZERO(&socks);
     FD_SET(sock, &socks);
-   // int done = 0;
-    if (select(sock +1, &socks, NULL, NULL, &t)){
 
-    //while (! done) {
-    for(j = 0; j < i; j++) {
-      FD_ZERO(&socks);
-      FD_SET(sock, &socks);
+    if (select(sock +1, &socks, NULL, NULL, &ack_t)){
 
-      mylog("inside for loop %d\n", j);
-
-      // wait to receive, or for a timeout
-      if (select(sock + 1, &socks, NULL, NULL, &ack_t)) {
-        unsigned char buf[10000];
-        int buf_len = sizeof(buf);
-        int received;
-        if ((received = recvfrom(sock, &buf, buf_len, 0, (struct sockaddr *) &in, (socklen_t *) &in_len)) < 0) {
-          perror("recvfrom");
-          exit(1);
-        }
-
-        header *myheader = get_header(buf);
-
-        if ((myheader->magic == MAGIC) && (myheader->ack == 1)) { // Took out (myheader->sequence >= sequence)
-          mylog("[recv ack] %d\n", myheader->sequence);
-          if(myheader->sequence > sequence)
-            sequence = myheader->sequence;
-          verify(sequence);
-          // Sliding window (Tahoe)
-          if(window < slow_start)
-            window = window*2;
-          else
-            window = window + 1;
-
-          // receiver's buffer
-          if(window > myheader->window)
-            window = myheader->window;
-         // done = 1;
-        } else {
-        
-          //if(myheader->magic != MAGIC) mylog("magic is wrong %d=/=%d\n", myheader->magic, MAGIC);
-          if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
-          if(myheader->ack != 1) mylog("this isn't an ack: %d\n", myheader->ack);
-
-          mylog("[recv corrupted ack] %x %d\n", MAGIC, sequence);
-        }
-      } else {
-        mylog("[error] dropped packet %d\n", j); 
-        window = window/2;
-        slow_start = window;
-        break;
+      unsigned char buf[10000];
+      int buf_len = sizeof(buf);
+      int received;
+      if ((received = recvfrom(sock, &buf, buf_len, 0, (struct sockaddr *) &in, (socklen_t *) &in_len)) < 0) {
+        perror("recvfrom");
+        exit(1);
       }
+
+      header *myheader = get_header(buf);
+
+      if ((myheader->magic == MAGIC) && (myheader->ack == 1)) {
+        mylog("[recv ack] %d\n", myheader->sequence);
+        verify(myheader->sequence);
+        removeAcked(myheader->sequence);
+        
+ 
+        // send next wave if possible.
+        toSend = canSend();
+        for(i = 0; i < toSend; i++) {
+          int packet_len = send_next_packet(sequence, sock, out);
+          if(packet_len > 0) {
+            addToWin(sequence);
+            sequence = sequence + packet_len;
+          }
+          else{
+            break;
+          }       
+        }
+
+      } 
+      else {
+        if(myheader->sequence < sequence) mylog("sequence is wrong %d < %d\n", myheader->sequence, sequence);
+        if(myheader->ack != 1) mylog("this isn't an ack: %d\n", myheader->ack);
+        mylog("[recv corrupted ack] %x %d\n", MAGIC, sequence);
+      }
+    } 
+    else {
+      mylog("[error] Timeout: dropped packet\n"); 
+      break;
     }
-    }
-    else{
-      mylog("[error] timeout occurred\n");
-    }
+ 
   }
 
   send_final_packet(sequence, sock, out);
