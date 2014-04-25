@@ -31,6 +31,7 @@ int FIN = 0;
 
 window WIN[100];
 int WIN_SIZE = 10;
+float ALPHA = 0.8;
 
 void usage() {
   printf("Usage: 3600send host:port\n");
@@ -164,6 +165,18 @@ void send_final_packet(int sequence, int sock, struct sockaddr_in out) {
   }
 }
 
+struct timeval getTimeFor(unsigned int sequence) {
+  int i;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(WIN[i].used && WIN[i].sequence == sequence){
+      return WIN[i].t;
+    }
+  }
+  struct timeval t;
+  t.tv_sec = 100;
+  return t;
+}
+
 struct timeval updateTime(struct timeval t, struct timeval before){
   struct timeval current;
   gettimeofday(&current, NULL);
@@ -172,12 +185,10 @@ struct timeval updateTime(struct timeval t, struct timeval before){
   unsigned long microCurrent = 1000000 * current.tv_sec + current.tv_usec;
   unsigned long microT = 1000000 * t.tv_sec + t.tv_usec;
 
-  unsigned long microNew = microCurrent - microBefore;
-  microNew = microNew * 3;
-  if(microNew < microT) {
-    t.tv_sec = microNew / 1000000;
-    t.tv_usec = microNew % 1000000;
-  }
+  microT = (ALPHA * microT) + ((1 - ALPHA) * (microCurrent-microBefore));
+
+  t.tv_sec = microT / 1000000;
+  t.tv_usec = microT % 1000000;
 
   mylog("new Timer is %lu sec, %lu usec\n", t.tv_sec, t.tv_usec);
   return t;
@@ -362,8 +373,6 @@ int main(int argc, char *argv[]) {
     FD_ZERO(&socks);
     FD_SET(sock, &socks);
 
-    struct timeval before;
-    gettimeofday(&before, NULL); 
     if (select(sock +1, &socks, NULL, NULL, &ack_t)){
 
       unsigned char buf[10000];
@@ -379,22 +388,15 @@ int main(int argc, char *argv[]) {
       if ((myheader->magic == MAGIC) && (myheader->ack == 1)) {
         mylog("[recv ack] %d\n", myheader->sequence);
         verify(myheader->sequence);
+        struct timeval before = getTimeFor(myheader->sequence);
         removeAcked(myheader->sequence);
         
         if(myheader->eof)
           break;
 
-       t = updateTime(t, before);
+       if(before.tv_sec != 100)
+         t = updateTime(t, before);
 
-        /*
-        if(WIN_SIZE < slow_start)
-          WIN_SIZE = WIN_SIZE * 2;
-        else
-          WIN_SIZE = WIN_SIZE + 1; 
-
-        if(WIN_SIZE  > myheader->window)
-          WIN_SIZE = myheader->window;
-        */
         // send next wave if possible.
         toSend = canSend();
         for(i = 0; i < toSend; i++) {
