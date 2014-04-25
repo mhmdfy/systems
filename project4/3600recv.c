@@ -22,8 +22,8 @@
 
 #include "3600sendrecv.h"
 
-int BUFFER_SIZE = 14600;
-char BUF[14600];
+int BUFFER_SIZE = 1460000;
+char BUF[1460000];
 int RECV = 0;
 header OOO[100 * sizeof(header)];
 int COUNT = 0;
