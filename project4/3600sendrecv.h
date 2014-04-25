@@ -22,6 +22,7 @@ typedef struct header_t {
 
 typedef struct window_t {
   unsigned int used:1;
+  unsigned int re:1;
   unsigned int sequence;
   struct timeval t;
 } window;

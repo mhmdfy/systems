@@ -168,7 +168,7 @@ void send_final_packet(int sequence, int sock, struct sockaddr_in out) {
 struct timeval getTimeFor(unsigned int sequence) {
   int i;
   for(i = 0; i < WIN_SIZE; i++) {
-    if(WIN[i].used && WIN[i].sequence == sequence){
+    if(WIN[i].used && WIN[i].sequence == sequence && !WIN[i].re){
       mylog("timer for %d is %lu (%lu)\n", WIN[i].sequence, WIN[i].t.tv_sec, WIN[i].t.tv_usec);
       return WIN[i].t;
     }
@@ -191,6 +191,7 @@ struct timeval updateTime(struct timeval t, struct timeval before){
   t.tv_sec = microT / 1000000;
   t.tv_usec = microT % 1000000;
 
+  mylog("Current - Before %lu (%lu)\n", (microCurrent-microBefore) / 1000000, (microCurrent-microBefore) % 1000000);
   mylog("new Timer is %lu sec, %lu usec\n", t.tv_sec, t.tv_usec);
   return t;
 }
@@ -252,6 +253,7 @@ unsigned int resendTimeout(struct timeval t, int sock, struct sockaddr_in out){
       if((microCurrent - microWin) > microT) {
         send_next_packet(WIN[i].sequence, sock, out);
         WIN[i].t = current;
+        WIN[i].re = 1;
         if(WIN[i].sequence > sent)
           sent = WIN[i].sequence;
       }
@@ -283,6 +285,7 @@ int addToWin(unsigned int sequence) {
   for(i = 0; i < WIN_SIZE; i++) {
     if(WIN[i].used == 0) {
       WIN[i].used = 1;
+      WIN[i].re = 0;
       WIN[i].sequence = sequence;
       gettimeofday(&WIN[i].t,NULL);
       return 1;
@@ -332,9 +335,9 @@ int main(int argc, char *argv[]) {
   fd_set socks;
 
   // construct the timeout
-  struct timeval t;
-  t.tv_sec = 2;
-  t.tv_usec = 0;
+  struct timeval max_t;
+  max_t.tv_sec = 2;
+  max_t.tv_usec = 0;
 
   struct timeval ack_t;
 
@@ -369,7 +372,7 @@ int main(int argc, char *argv[]) {
 
   while(1) {
     readin(BUFFER_SIZE/5);
-    ack_t = getTimer(t);
+    ack_t = getTimer(max_t);
 
     FD_ZERO(&socks);
     FD_SET(sock, &socks);
@@ -395,8 +398,8 @@ int main(int argc, char *argv[]) {
         if(myheader->eof)
           break;
 
-      // if(before.tv_sec != 100)
-       //  t = updateTime(t, before);
+        if(before.tv_sec != 100)
+          max_t = updateTime(max_t, before);
 
        if(canDouble && WIN_SIZE < 100)
          WIN_SIZE = WIN_SIZE + 1;
@@ -430,7 +433,7 @@ int main(int argc, char *argv[]) {
       mylog("[error] Timeout: dropped packet\n"); 
       canDouble = 0;
       mylog("window size = %d\n", WIN_SIZE);
-      if(resendTimeout(t, sock, out) == sequence) {
+      if(resendTimeout(max_t, sock, out) == sequence) {
         send_final_packet(sequence, sock, out);
       } 
       sentEof = 0;
