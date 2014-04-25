@@ -37,73 +37,6 @@ void usage() {
   exit(1);
 }
 
-struct timeval getLowestTimeval() {
-  int i;
-  int min_i = 0;
-  unsigned long min = 0;
-  for(i = 0; i < WIN_SIZE; i++) {
-    if(WIN[i].used) {
-      unsigned long val = 1000000 * WIN[i].t.tv_sec + WIN[i].t.tv_usec;
-      if(val < min || min == 0) {
-        min = val;
-        min_i = i;
-      }
-    }
-  }
-
-  return WIN[min_i].t;
-}
-
-
-struct timeval getTimer(struct timeval t) {
-  struct timeval lowest = getLowestTimeval();
-  struct timeval current;
-  gettimeofday(&current, NULL);
-  
-  unsigned long microLowest = 1000000 * lowest.tv_sec + lowest.tv_usec;
-  unsigned long microCurrent = 1000000 * current.tv_sec + current.tv_usec;
-  unsigned long microT = 1000000 * t.tv_sec + t.tv_usec;
-
-  unsigned long microNew = microT - (microCurrent - microLowest);
-
-  struct timeval new;
-  new.tv_sec = microNew / 1000000;
-  new.tv_usec = microNew % 1000000;
-
-  return new;
-}
-
-int canSend() {
-  int i;
-  int count = 0;
-  for(i = 0; i < WIN_SIZE; i++) {
-    if(!WIN[i].used)
-      count++;
-  }
-  return count;
-}
-
-void removeAcked(unsigned int sequence) {
-  int i;
-  for(i = 0; i < WIN_SIZE; i++) {
-    if(WIN[i].used && WIN[i].sequence < sequence)
-      WIN[i].used = 0;
-  }
-}
-
-int addToWin(unsigned int sequence) {
-  int i;
-  for(i = 0; i < WIN_SIZE; i++) {
-    if(WIN[i].used == 0) {
-      WIN[i].used = 1;
-      WIN[i].sequence = sequence;
-      gettimeofday(&WIN[i].t,NULL);
-      return 1;
-    }
-  }
-  return 0;
-}
-
 int verify(int sequence) {
   if(SENTACKED < SENT) {
     int newSentAck = SENTACKED+sequence;
@@ -151,6 +84,7 @@ int readin(int size){
     if(FIN == BUFFER_SIZE)
       FIN = 0;
   }
+  mylog("read %d bytes out of %d\n", len, size);
   return len;
 }
 
@@ -203,7 +137,7 @@ void *get_next_packet(int sequence, int *len) {
   return packet;
 }
 
-int send_next_packet(int sequence, int sock, struct sockaddr_in out) {
+int send_next_packet(int sequence, int sock, struct sockaddr_in out){
   int packet_len = 0;
   void *packet = get_next_packet(sequence, &packet_len);
 
@@ -228,6 +162,94 @@ void send_final_packet(int sequence, int sock, struct sockaddr_in out) {
     perror("sendto");
     exit(1);
   }
+}
+
+struct timeval getLowestTimeval() {
+  int i;
+  int min_i = 0;
+  unsigned long min = 0;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(WIN[i].used) {
+      unsigned long val = 1000000 * WIN[i].t.tv_sec + WIN[i].t.tv_usec;
+      if(val < min || min == 0) {
+        min = val;
+        min_i = i;
+      }
+    }
+  }
+
+  return WIN[min_i].t;
+}
+
+
+struct timeval getTimer(struct timeval t) {
+  struct timeval lowest = getLowestTimeval();
+  struct timeval current;
+  gettimeofday(&current, NULL);
+  
+  unsigned long microLowest = 1000000 * lowest.tv_sec + lowest.tv_usec;
+  unsigned long microCurrent = 1000000 * current.tv_sec + current.tv_usec;
+  unsigned long microT = 1000000 * t.tv_sec + t.tv_usec;
+
+  if(microLowest == 0)
+    return lowest;
+
+  unsigned long microNew = microT - (microCurrent - microLowest);
+
+  struct timeval new;
+  new.tv_sec = microNew / 1000000;
+  new.tv_usec = microNew % 1000000;
+
+  return new;
+}
+
+void resendTimeout(struct timeval t, int sock, struct sockaddr_in out){
+  struct timeval current;
+  gettimeofday(&current, NULL);
+  unsigned long microCurrent = 1000000 * current.tv_sec + current.tv_usec;
+  unsigned long microT = 1000000 * t.tv_sec + t.tv_usec;
+
+  int i;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(WIN[i].used) {
+      unsigned long microWin = 1000000 * WIN[i].t.tv_sec + WIN[i].t.tv_usec;
+      if((microCurrent - microWin) > microT) {
+        send_next_packet(WIN[i].sequence, sock, out);
+        WIN[i].t = current;
+      }
+    }
+  }
+}
+
+int canSend() {
+  int i;
+  int count = 0;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(!WIN[i].used)
+      count++;
+  }
+  return count;
+}
+
+void removeAcked(unsigned int sequence) {
+  int i;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(WIN[i].used && WIN[i].sequence < sequence)
+      WIN[i].used = 0;
+  }
+}
+
+int addToWin(unsigned int sequence) {
+  int i;
+  for(i = 0; i < WIN_SIZE; i++) {
+    if(WIN[i].used == 0) {
+      WIN[i].used = 1;
+      WIN[i].sequence = sequence;
+      gettimeofday(&WIN[i].t,NULL);
+      return 1;
+    }
+  }
+  return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -272,14 +294,13 @@ int main(int argc, char *argv[]) {
 
   // construct the timeout
   struct timeval t;
-  t.tv_sec = 1;
+  t.tv_sec = 2;
   t.tv_usec = 0;
 
   struct timeval ack_t;
-  ack_t.tv_sec = 2;
-  ack_t.tv_usec = 0;
 
   unsigned int sequence = 0;
+  int sentEof = 0;
   int i;
   
   readin(BUFFER_SIZE/2);
@@ -297,6 +318,9 @@ int main(int argc, char *argv[]) {
       sequence = sequence + packet_len;
     }
     else{
+      send_final_packet(sequence, sock, out);
+      addToWin(sequence);
+      sentEof = 1;
       break;
     }
   }
@@ -325,6 +349,8 @@ int main(int argc, char *argv[]) {
         verify(myheader->sequence);
         removeAcked(myheader->sequence);
         
+        if(myheader->eof)
+          break;
  
         // send next wave if possible.
         toSend = canSend();
@@ -335,6 +361,11 @@ int main(int argc, char *argv[]) {
             sequence = sequence + packet_len;
           }
           else{
+            if(!sentEof) {
+              send_final_packet(sequence, sock, out);
+              addToWin(sequence);
+              sentEof = 1;
+            }
             break;
           }       
         }
@@ -348,12 +379,11 @@ int main(int argc, char *argv[]) {
     } 
     else {
       mylog("[error] Timeout: dropped packet\n"); 
-      break;
+      resendTimeout(t, sock, out);
     }
  
   }
 
-  send_final_packet(sequence, sock, out);
   mylog("[completed]\n");
 
   return 0;
