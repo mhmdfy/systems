@@ -169,6 +169,7 @@ struct timeval getTimeFor(unsigned int sequence) {
   int i;
   for(i = 0; i < WIN_SIZE; i++) {
     if(WIN[i].used && WIN[i].sequence == sequence){
+      mylog("timer for %d is %lu (%lu)\n", WIN[i].sequence, WIN[i].t.tv_sec, WIN[i].t.tv_usec);
       return WIN[i].t;
     }
   }
@@ -338,7 +339,7 @@ int main(int argc, char *argv[]) {
   struct timeval ack_t;
 
   unsigned int sequence = 0;
-  int slow_start = 100;
+  int canDouble = 1;
   int sentEof = 0;
   int i;
   
@@ -388,14 +389,17 @@ int main(int argc, char *argv[]) {
       if ((myheader->magic == MAGIC) && (myheader->ack == 1)) {
         mylog("[recv ack] %d\n", myheader->sequence);
         verify(myheader->sequence);
-        struct timeval before = getTimeFor(myheader->sequence);
+        struct timeval before = getTimeFor(myheader->sequence-myheader->length);
         removeAcked(myheader->sequence);
         
         if(myheader->eof)
           break;
 
-       if(before.tv_sec != 100)
-         t = updateTime(t, before);
+      // if(before.tv_sec != 100)
+       //  t = updateTime(t, before);
+
+       if(canDouble && WIN_SIZE < 100)
+         WIN_SIZE = WIN_SIZE + 1;
 
         // send next wave if possible.
         toSend = canSend();
@@ -424,8 +428,8 @@ int main(int argc, char *argv[]) {
     } 
     else {
       mylog("[error] Timeout: dropped packet\n"); 
-      t.tv_sec = 1;
-      t.tv_usec = 0;
+      canDouble = 0;
+      mylog("window size = %d\n", WIN_SIZE);
       if(resendTimeout(t, sock, out) == sequence) {
         send_final_packet(sequence, sock, out);
       } 

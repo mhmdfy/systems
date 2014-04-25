@@ -22,8 +22,8 @@
 
 #include "3600sendrecv.h"
 
-int BUFFER_SIZE = 146000;
-char BUF[146000];
+int BUFFER_SIZE = 14600;
+char BUF[14600];
 int RECV = 0;
 header OOO[100 * sizeof(header)];
 int COUNT = 0;
@@ -59,15 +59,6 @@ int isAlreadyReceived(unsigned int sequence) {
     return size;
   }
   return 0;
-  /*for(i = 0; i < COUNT; i++) {
-    if(sequence == OOO[i].sequence) {
-      int size = OOO[i].length;
-      reorderArray(i);
-      mylog("already received %d\n", sequence);
-      return size;
-     }
-   }
-   return 0; */
 }
 
 int writeToBuf(char* data, int size, unsigned int sequence) {
@@ -77,7 +68,9 @@ int writeToBuf(char* data, int size, unsigned int sequence) {
     memcpy(BUF+RECV, data, newSize);
     RECV = 0;
     write(1, BUF, BUFFER_SIZE);
+    mylog("writing all from buffer\n");
     writeToBuf(data+newSize, size-newSize, sequence);
+    sequence = sequence + size;
   }
   else {
     memcpy(BUF+RECV, data, size);
@@ -207,7 +200,7 @@ int main() {
     }
 
     mylog("[send ack] %d\n", prev_sequence);
-    responseheader = make_header(prev_sequence, 0, eof, 1, BUFFER_SIZE-RECV);
+    responseheader = make_header(prev_sequence, myheader->length, eof, 1, BUFFER_SIZE-RECV);
     if (sendto(sock, responseheader, sizeof(header), 0, (struct sockaddr *) &in, (socklen_t) sizeof(in)) < 0) {
       perror("sendto");
       exit(1);
