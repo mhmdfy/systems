@@ -29,7 +29,7 @@ int SENTACKED = 0;
 int SENT = 0;
 int FIN = 0;
 
-window WIN[10];
+window WIN[100];
 int WIN_SIZE = 10;
 
 void usage() {
@@ -164,6 +164,25 @@ void send_final_packet(int sequence, int sock, struct sockaddr_in out) {
   }
 }
 
+struct timeval updateTime(struct timeval t, struct timeval before){
+  struct timeval current;
+  gettimeofday(&current, NULL);
+
+  unsigned long microBefore = 1000000 * before.tv_sec + before.tv_usec;
+  unsigned long microCurrent = 1000000 * current.tv_sec + current.tv_usec;
+  unsigned long microT = 1000000 * t.tv_sec + t.tv_usec;
+
+  unsigned long microNew = microCurrent - microBefore;
+  microNew = microNew * 3;
+  if(microNew < microT) {
+    t.tv_sec = microNew / 1000000;
+    t.tv_usec = microNew % 1000000;
+  }
+
+  mylog("new Timer is %lu sec, %lu usec\n", t.tv_sec, t.tv_usec);
+  return t;
+}
+
 struct timeval getLowestTimeval() {
   int i;
   int min_i = 0;
@@ -186,15 +205,19 @@ struct timeval getTimer(struct timeval t) {
   struct timeval lowest = getLowestTimeval();
   struct timeval current;
   gettimeofday(&current, NULL);
-  
+
   unsigned long microLowest = 1000000 * lowest.tv_sec + lowest.tv_usec;
   unsigned long microCurrent = 1000000 * current.tv_sec + current.tv_usec;
   unsigned long microT = 1000000 * t.tv_sec + t.tv_usec;
-
-  if(microLowest == 0)
+  
+ if(microLowest == 0)
     return lowest;
 
-  unsigned long microNew = microT - (microCurrent - microLowest);
+  unsigned long microNew;
+  if(microT > (microCurrent - microLowest))
+    microNew = microT - (microCurrent - microLowest);
+  else
+    microNew = microT;
 
   struct timeval new;
   new.tv_sec = microNew / 1000000;
@@ -304,14 +327,17 @@ int main(int argc, char *argv[]) {
   struct timeval ack_t;
 
   unsigned int sequence = 0;
+  int slow_start = 100;
   int sentEof = 0;
   int i;
   
 
+  WIN_SIZE = 100;
   // initialize buffer
   for(i = 0; i < WIN_SIZE; i++)
     WIN[i].used = 0;
 
+  WIN_SIZE = 10;
   // send first wave.
   int toSend = canSend();
   for(i = 0; i < toSend; i++) {
@@ -336,6 +362,8 @@ int main(int argc, char *argv[]) {
     FD_ZERO(&socks);
     FD_SET(sock, &socks);
 
+    struct timeval before;
+    gettimeofday(&before, NULL); 
     if (select(sock +1, &socks, NULL, NULL, &ack_t)){
 
       unsigned char buf[10000];
@@ -355,7 +383,18 @@ int main(int argc, char *argv[]) {
         
         if(myheader->eof)
           break;
- 
+
+       t = updateTime(t, before);
+
+        /*
+        if(WIN_SIZE < slow_start)
+          WIN_SIZE = WIN_SIZE * 2;
+        else
+          WIN_SIZE = WIN_SIZE + 1; 
+
+        if(WIN_SIZE  > myheader->window)
+          WIN_SIZE = myheader->window;
+        */
         // send next wave if possible.
         toSend = canSend();
         for(i = 0; i < toSend; i++) {
@@ -383,6 +422,8 @@ int main(int argc, char *argv[]) {
     } 
     else {
       mylog("[error] Timeout: dropped packet\n"); 
+      t.tv_sec = 1;
+      t.tv_usec = 0;
       if(resendTimeout(t, sock, out) == sequence) {
         send_final_packet(sequence, sock, out);
       } 
