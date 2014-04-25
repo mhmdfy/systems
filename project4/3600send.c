@@ -23,8 +23,8 @@
 #include "3600sendrecv.h"
 
 static int DATA_SIZE = 1460;
-int BUFFER_SIZE = 146000;
-char BUF[146000];
+int BUFFER_SIZE = 1460000;
+char BUF[1460000];
 int SENTACKED = 0;
 int SENT = 0;
 int FIN = 0;

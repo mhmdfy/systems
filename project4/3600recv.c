@@ -24,8 +24,7 @@
 
 int BUFFER_SIZE = 1460000;
 char BUF[1460000];
-int RECV = 0;
-header OOO[100 * sizeof(header)];
+header OOO[1000 * sizeof(header)];
 int COUNT = 0;
 
 void reorderArray(int min) {
@@ -54,6 +53,7 @@ int isAlreadyReceived(unsigned int sequence) {
   int i = isInBuf(sequence);
   if(i >= 0) {
     int size = OOO[i].length;
+    write(1, BUF + (OOO[i].sequence % BUFFER_SIZE), size);
     reorderArray(i);
     mylog("already received %d\n", sequence);
     return size;
@@ -62,34 +62,22 @@ int isAlreadyReceived(unsigned int sequence) {
 }
 
 int writeToBuf(char* data, int size, unsigned int sequence) {
+  write(1, data, size);
+  sequence = sequence + size;
+ 
+  while(1) {
+    size = isAlreadyReceived(sequence);
+    if(size == 0)
+      break;
+    sequence = sequence + size;
+  }
 
-  if(RECV + size >= BUFFER_SIZE) {
-    int newSize = BUFFER_SIZE-RECV;
-    memcpy(BUF+RECV, data, newSize);
-    RECV = 0;
-    write(1, BUF, BUFFER_SIZE);
-    mylog("writing all from buffer\n");
-    writeToBuf(data+newSize, size-newSize, sequence);
-    sequence = sequence + size;
-  }
-  else {
-    memcpy(BUF+RECV, data, size);
-    RECV = RECV + size;
-    sequence = sequence + size;
-    while(1) {
-      size = isAlreadyReceived(sequence);
-      if(size == 0)
-        break;
-      RECV = RECV + size;
-      sequence = sequence + size;
-    }
-  }
-  return sequence; 
+  return sequence;
 }
 
 void writeOutOfOrder(char* data, int size, int sequence) {  
   mylog("adding %d to ooo\n", sequence);
-  memcpy(BUF+(sequence%146000), data, size);
+  memcpy(BUF + (sequence % BUFFER_SIZE), data, size);
   OOO[COUNT].sequence = sequence;
   OOO[COUNT].length = size;
   COUNT++;
@@ -190,7 +178,6 @@ int main() {
     } 
     else {
       mylog("[error] timeout occurred\n");
-      write(1, BUF, RECV);
       exit(1);
     }
 
@@ -200,7 +187,7 @@ int main() {
     }
 
     mylog("[send ack] %d\n", prev_sequence);
-    responseheader = make_header(prev_sequence, myheader->length, eof, 1, BUFFER_SIZE-RECV);
+    responseheader = make_header(prev_sequence, myheader->length, eof, 1, BUFFER_SIZE-COUNT);
     if (sendto(sock, responseheader, sizeof(header), 0, (struct sockaddr *) &in, (socklen_t) sizeof(in)) < 0) {
       perror("sendto");
       exit(1);
@@ -208,13 +195,11 @@ int main() {
 
     if (eof) { 
       mylog("[completed]\n");
-      write(1, BUF, RECV);
       exit(0);
     }
     
   }
-  mylog("finished loop, writing to stdout\n");
-  write(1, BUF, RECV);
 
+  mylog("finished looping somehow\n");
   return 0;
 }
