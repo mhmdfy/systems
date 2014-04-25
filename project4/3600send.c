@@ -203,7 +203,8 @@ struct timeval getTimer(struct timeval t) {
   return new;
 }
 
-void resendTimeout(struct timeval t, int sock, struct sockaddr_in out){
+unsigned int resendTimeout(struct timeval t, int sock, struct sockaddr_in out){
+  unsigned int sent = 0;
   struct timeval current;
   gettimeofday(&current, NULL);
   unsigned long microCurrent = 1000000 * current.tv_sec + current.tv_usec;
@@ -216,9 +217,12 @@ void resendTimeout(struct timeval t, int sock, struct sockaddr_in out){
       if((microCurrent - microWin) > microT) {
         send_next_packet(WIN[i].sequence, sock, out);
         WIN[i].t = current;
+        if(WIN[i].sequence > sent)
+          sent = WIN[i].sequence;
       }
     }
   }
+  return sent;
 }
 
 int canSend() {
@@ -303,7 +307,6 @@ int main(int argc, char *argv[]) {
   int sentEof = 0;
   int i;
   
-  readin(BUFFER_SIZE/2);
 
   // initialize buffer
   for(i = 0; i < WIN_SIZE; i++)
@@ -312,6 +315,7 @@ int main(int argc, char *argv[]) {
   // send first wave.
   int toSend = canSend();
   for(i = 0; i < toSend; i++) {
+    readin(BUFFER_SIZE/5);
     int packet_len = send_next_packet(sequence, sock, out);
     if(packet_len > 0) {
       addToWin(sequence);
@@ -326,7 +330,7 @@ int main(int argc, char *argv[]) {
   }
 
   while(1) {
-    readin(BUFFER_SIZE/2);
+    readin(BUFFER_SIZE/5);
     ack_t = getTimer(t);
 
     FD_ZERO(&socks);
@@ -379,7 +383,10 @@ int main(int argc, char *argv[]) {
     } 
     else {
       mylog("[error] Timeout: dropped packet\n"); 
-      resendTimeout(t, sock, out);
+      if(resendTimeout(t, sock, out) == sequence) {
+        send_final_packet(sequence, sock, out);
+      } 
+      sentEof = 0;
     }
  
   }

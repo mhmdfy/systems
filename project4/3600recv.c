@@ -30,23 +30,44 @@ int COUNT = 0;
 
 void reorderArray(int min) {
   int i;
+  mylog("recv buf [");
+  for(i = 0; i < COUNT; i++){
+    mylog("%d (%d), ", OOO[i].sequence, OOO[i].length);
+  }
+  mylog("]\n");
   COUNT--;
   for(i = min; i < COUNT; i++) {
     OOO[i] = OOO[i+1];
   }
 }
 
-int isAlreadyReceived(unsigned int sequence) {
+int isInBuf(unsigned int sequence) {
   int i;
-  for(i = 0; i < COUNT; i++) {
+  for(i = 0; i < COUNT; i++){
+    if(sequence == OOO[i].sequence)
+      return i;
+  }
+  return -1;
+}
+
+int isAlreadyReceived(unsigned int sequence) {
+  int i = isInBuf(sequence);
+  if(i >= 0) {
+    int size = OOO[i].length;
+    reorderArray(i);
+    mylog("already received %d\n", sequence);
+    return size;
+  }
+  return 0;
+  /*for(i = 0; i < COUNT; i++) {
     if(sequence == OOO[i].sequence) {
-      reorderArray(i);
       int size = OOO[i].length;
+      reorderArray(i);
       mylog("already received %d\n", sequence);
       return size;
      }
    }
-   return 0; 
+   return 0; */
 }
 
 int writeToBuf(char* data, int size, unsigned int sequence) {
@@ -74,6 +95,7 @@ int writeToBuf(char* data, int size, unsigned int sequence) {
 }
 
 void writeOutOfOrder(char* data, int size, int sequence) {  
+  mylog("adding %d to ooo\n", sequence);
   memcpy(BUF+(sequence%146000), data, size);
   OOO[COUNT].sequence = sequence;
   OOO[COUNT].length = size;
@@ -165,7 +187,7 @@ int main() {
         else {
           mylog("Received packet out of order: %d vs %d\n", prev_sequence, myheader->sequence); 
           isOrdered = 0;
-          if(myheader->sequence > prev_sequence)
+          if(myheader->sequence > prev_sequence && isInBuf(myheader->sequence) < 0 && !myheader->eof)
             writeOutOfOrder(data, myheader->length, myheader->sequence);
         }
       } 
